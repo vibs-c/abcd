@@ -63,3 +63,6 @@ include(":listenTogetherProto")
 include(":opusDecoder")
 include(":androidApp")
 include(":desktopApp")
+
+// abcd DJ Mode modules (see CLAUDE.md)
+include(":dj-core")
