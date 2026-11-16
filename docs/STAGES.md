@@ -1,7 +1,8 @@
 # abcd v1 build stages
 
-The working plan for building v1 of DJ Mode from `docs/ABCD_rev2.md`. One stage = one or more green,
-committed steps. At the end of each stage Claude reports the APK path and a step-by-step phone check.
+The working plan for building v1 of DJ Mode from `docs/ABCD_rev2.md`. Each stage ends with a green
+build and a test APK at `apk/abcd-stage-<N>.apk`, plus a step-by-step phone check. Claude then stops
+and asks for commit confirmation; it commits only after the owner says yes.
 
 **How to run a stage**
 

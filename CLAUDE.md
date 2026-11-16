@@ -15,9 +15,10 @@ stage 7 is design-only and waits for the owner's "Approved".
   modules or `androidApp`.
 - **Green build loop.** After every meaningful change run the Android build, read the errors, fix,
   rebuild until green. Never hand over a broken build (native errors count).
-- **Small stages, one commit each** (Conventional Commits). After each stage report the APK path and
-  a step-by-step phone test. The owner has authorised commits per stage; AGENTS.md's "no commit
-  without approval" is superseded for this. Still never push, force-push or rewrite history unasked.
+- **Small stages; ask before every commit.** At the end of each stage: build a debug APK, copy it to
+  `apk/abcd-stage-<N>.apk` (git-ignored), report its path and a step-by-step phone test, then stop
+  and ask the owner to confirm the commit. Commit (Conventional Commits) only after a yes. Never push,
+  force-push or rewrite history unasked.
 - **Ask first before:** changing Metrolist's core player/service (`MusicService`, `ExoPlaybackPlayer`,
   `AndroidQueueTransitions`, `MediaSessionPlayer`, `PlayerConnection`), changing Metrolist's database
   (`MusicDatabase`), or adding any network endpoint.
