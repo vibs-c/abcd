@@ -11,13 +11,15 @@ object NativeAnalyzer {
     }
 
     /**
-     * Analyses mono PCM and returns the result as JSON ("wire format", see `AnalysisResult.fromWireJson`).
-     * Blocks for seconds on a full song, so call it off the main thread.
+     * Analyses the first [frames] samples of mono [pcm] and returns the result as JSON ("wire format",
+     * see `AnalysisResult.fromWireJson`). Blocks for seconds on a full song, so call it off the main
+     * thread.
      *
      * @throws IllegalStateException if the audio is too short or silent, or analysis fails.
      */
     external fun analyzeJson(
         pcm: FloatArray,
+        frames: Int,
         sampleRate: Int,
     ): String
 

@@ -15,14 +15,21 @@ void throwJava(JNIEnv* env, const char* className, const char* message) {
 
 extern "C" {
 
-// Kotlin: object NativeAnalyzer { external fun analyzeJson(pcm: FloatArray, sampleRate: Int): String }
+// Kotlin: object NativeAnalyzer { external fun analyzeJson(pcm: FloatArray, frames: Int, sampleRate: Int): String }
+// Only the first `frames` samples are audio: the decoder passes its working buffer, which may have
+// spare room at the end, so a whole song is never copied into a second array.
 JNIEXPORT jstring JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeAnalyzer_analyzeJson(JNIEnv* env, jobject /*thiz*/, jfloatArray pcm,
-                                                                                         jint sampleRate) {
+                                                                                         jint frameCount, jint sampleRate) {
     if (pcm == nullptr) {
         throwJava(env, "java/lang/IllegalArgumentException", "pcm is null");
         return nullptr;
     }
-    const jsize frames = env->GetArrayLength(pcm);
+    const jsize length = env->GetArrayLength(pcm);
+    if (frameCount < 0 || frameCount > length) {
+        throwJava(env, "java/lang/IllegalArgumentException", "frames outside the array");
+        return nullptr;
+    }
+    const jsize frames = frameCount;
     jfloat* samples = env->GetFloatArrayElements(pcm, nullptr);
     if (samples == nullptr) {
         throwJava(env, "java/lang/OutOfMemoryError", "Could not read PCM");

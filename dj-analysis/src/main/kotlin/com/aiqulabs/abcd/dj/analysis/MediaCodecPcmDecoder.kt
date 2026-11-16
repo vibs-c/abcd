@@ -56,7 +56,8 @@ class MediaCodecPcmDecoder(
         var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
         var sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         var encoding = AudioFormat.ENCODING_PCM_16BIT
-        val sink = MonoSink()
+        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else -1L
+        val sink = MonoSink(MonoSink.capacityFor(durationUs, sampleRate))
 
         val codec = MediaCodec.createDecoderByType(mime)
         try {
@@ -110,7 +111,7 @@ class MediaCodecPcmDecoder(
             codec.release()
         }
         if (sink.size == 0) throw IOException("Decoder produced no audio")
-        return PcmAudio(sink.toFloatArray(), sampleRate)
+        return sink.toPcmAudio(sampleRate)
     }
 
     private companion object {

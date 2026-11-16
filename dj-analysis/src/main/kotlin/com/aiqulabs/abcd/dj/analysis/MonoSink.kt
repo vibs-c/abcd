@@ -1,6 +1,7 @@
 package com.aiqulabs.abcd.dj.analysis
 
 import android.media.AudioFormat
+import com.aiqulabs.abcd.dj.core.analysis.PcmAudio
 import java.nio.ByteBuffer
 
 /**
@@ -8,11 +9,16 @@ import java.nio.ByteBuffer
  *
  * Idea: the decoder hands over interleaved samples (L R L R ...) in 16-bit or float form. For each
  * frame we average the channels into one value in [-1, 1] and append it.
+ *
+ * Memory matters here: a 4-minute 48 kHz song is about 46 MB of floats, and the app's heap limit can
+ * be under 200 MB. So the decoder sizes the array up front from the track's duration
+ * ([initialCapacity]), growth is by 1.5x rather than 2x when the estimate is short, and [toPcmAudio]
+ * hands over the array itself instead of copying it to an exact size.
  */
 internal class MonoSink(
-    initialCapacity: Int = 1 shl 20,
+    initialCapacity: Int = DEFAULT_CAPACITY,
 ) {
-    private var data = FloatArray(initialCapacity)
+    private var data = FloatArray(initialCapacity.coerceAtLeast(1))
 
     var size = 0
         private set
@@ -44,16 +50,37 @@ internal class MonoSink(
         }
     }
 
+    /** The collected audio without copying: the array may be longer than [size]. */
+    fun toPcmAudio(sampleRate: Int): PcmAudio = PcmAudio(data, sampleRate, sampleCount = size)
+
+    /** An exact-size copy (tests and small buffers only; a full song should use [toPcmAudio]). */
     fun toFloatArray(): FloatArray = data.copyOf(size)
 
     private fun ensureCapacity(needed: Int) {
         if (needed <= data.size) return
-        var capacity = data.size
-        while (capacity < needed) capacity *= 2
-        data = data.copyOf(capacity)
+        var capacity = data.size.toLong()
+        while (capacity < needed) capacity += capacity / 2 + 1
+        data = data.copyOf(capacity.coerceAtMost(Int.MAX_VALUE.toLong() - 8).toInt())
     }
 
-    private companion object {
-        const val PCM16_SCALE = 32768f
+    companion object {
+        private const val PCM16_SCALE = 32768f
+        const val DEFAULT_CAPACITY = 1 shl 20
+
+        /**
+         * Room for [durationUs] of audio at [sampleRate], plus 2% and a little extra, because the
+         * container's duration is only an estimate. Unknown duration falls back to [DEFAULT_CAPACITY].
+         */
+        fun capacityFor(
+            durationUs: Long,
+            sampleRate: Int,
+        ): Int {
+            if (durationUs <= 0 || sampleRate <= 0) return DEFAULT_CAPACITY
+            val frames = durationUs * sampleRate / 1_000_000.0 * 1.02 + sampleRate
+            return frames.coerceAtMost(MAX_PRESIZE.toDouble()).toInt()
+        }
+
+        /** Never pre-allocate more than 30 min at 48 kHz from a (possibly wrong) duration header. */
+        private const val MAX_PRESIZE = 30 * 60 * 48_000
     }
 }

@@ -3,13 +3,20 @@ package com.aiqulabs.abcd.dj.core.analysis
 /**
  * Decoded audio, ready for analysis: one channel of samples in [-1, 1].
  *
- * Any sample rate is fine; the analyzer resamples internally.
+ * Only the first [sampleCount] entries of [samples] are audio. A decoder may hand over its working
+ * buffer with spare room at the end instead of copying a full song into an exact-size array, which
+ * would briefly need twice the memory. Any sample rate is fine; the analyzer resamples internally.
  */
 class PcmAudio(
     val samples: FloatArray,
     val sampleRate: Int,
+    val sampleCount: Int = samples.size,
 ) {
-    val durationMs: Double get() = if (sampleRate > 0) 1000.0 * samples.size / sampleRate else 0.0
+    init {
+        require(sampleCount in 0..samples.size) { "sampleCount $sampleCount outside 0..${samples.size}" }
+    }
+
+    val durationMs: Double get() = if (sampleRate > 0) 1000.0 * sampleCount / sampleRate else 0.0
 }
 
 /** Where audio comes from: a file path or a platform URI string. */

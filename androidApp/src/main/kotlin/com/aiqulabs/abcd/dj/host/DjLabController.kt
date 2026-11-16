@@ -1,6 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
 import android.content.Context
+import com.aiqulabs.abcd.dj.analysis.AnalysisGate
 import com.aiqulabs.abcd.dj.analysis.MediaCodecPcmDecoder
 import com.aiqulabs.abcd.dj.analysis.NativeAudioAnalyzer
 import com.aiqulabs.abcd.dj.core.analysis.AudioSource
@@ -193,20 +194,25 @@ object DjLabController {
             return
         }
         mutableState.update { it.copy(busy = LabBusy(title, LabBusy.Step.DECODING), message = null) }
-        val decodeStart = System.nanoTime()
-        val pcm = MediaCodecPcmDecoder(context).decodeToMono(AudioSource(location))
-        val decodeMs = (System.nanoTime() - decodeStart) / 1_000_000
-        mutableState.update { it.copy(busy = LabBusy(title, LabBusy.Step.ANALYSING)) }
-        val analyseStart = System.nanoTime()
-        val result = NativeAudioAnalyzer().analyze(pcm)
-        Timber.tag(TAG).d(
-            "%s: decode %d ms, analyse %d ms (%.0f s of audio, %s)",
-            title,
-            decodeMs,
-            (System.nanoTime() - analyseStart) / 1_000_000,
-            pcm.durationMs / 1000,
-            location.substringBefore(":"),
-        )
+        // One decode + analyse at a time across the app (see AnalysisGate).
+        val result =
+            AnalysisGate.run {
+                val decodeStart = System.nanoTime()
+                val pcm = MediaCodecPcmDecoder(context).decodeToMono(AudioSource(location))
+                val decodeMs = (System.nanoTime() - decodeStart) / 1_000_000
+                mutableState.update { it.copy(busy = LabBusy(title, LabBusy.Step.ANALYSING)) }
+                val analyseStart = System.nanoTime()
+                val analysed = NativeAudioAnalyzer().analyze(pcm)
+                Timber.tag(TAG).d(
+                    "%s: decode %d ms, analyse %d ms (%.0f s of audio, %s)",
+                    title,
+                    decodeMs,
+                    (System.nanoTime() - analyseStart) / 1_000_000,
+                    pcm.durationMs / 1000,
+                    location.substringBefore(":"),
+                )
+                analysed
+            }
         repository.save(videoId, result, track)
 
         val stored = checkNotNull(repository.load(videoId))

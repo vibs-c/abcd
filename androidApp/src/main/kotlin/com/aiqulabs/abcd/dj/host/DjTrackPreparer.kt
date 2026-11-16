@@ -1,5 +1,6 @@
 package com.aiqulabs.abcd.dj.host
 
+import com.aiqulabs.abcd.dj.analysis.AnalysisGate
 import com.aiqulabs.abcd.dj.core.analysis.AnalysisResult
 import com.aiqulabs.abcd.dj.core.analysis.AudioAnalyzer
 import com.aiqulabs.abcd.dj.core.analysis.AudioSource
@@ -81,7 +82,9 @@ internal class DjTrackPreparer(
         }
     }
 
-    private suspend fun analyse(file: DjAudioFile): AnalysisResult = analyzer.analyze(decoder.decodeToMono(AudioSource(file.location)))
+    /** Decode + analyse under [AnalysisGate], so only one decoded song is in memory at a time. */
+    private suspend fun analyse(file: DjAudioFile): AnalysisResult =
+        AnalysisGate.run { analyzer.analyze(decoder.decodeToMono(AudioSource(file.location))) }
 
     private companion object {
         const val TAG = "DjTrackPreparer"

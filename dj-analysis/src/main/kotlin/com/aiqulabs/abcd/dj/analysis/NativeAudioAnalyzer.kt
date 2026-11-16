@@ -23,7 +23,7 @@ class NativeAudioAnalyzer(
     override suspend fun analyze(pcm: PcmAudio): AnalysisResult =
         nativeLock.withLock {
             withContext(dispatcher) {
-                AnalysisResult.fromWireJson(NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleRate))
+                AnalysisResult.fromWireJson(NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleCount, pcm.sampleRate))
             }
         }
 

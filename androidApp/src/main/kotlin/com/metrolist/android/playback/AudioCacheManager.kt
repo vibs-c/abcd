@@ -887,6 +887,14 @@ class AudioCacheManager(
                     }
                 check(target.length() >= MIN_AUDIO_BYTES) { "Downloaded audio is too small" }
                 mimeType
+            } catch (e: CancellationException) {
+                target.delete()
+                throw e
+            } catch (e: Exception) {
+                target.delete()
+                // Same as storeAudioFile: marks a failed transfer (an expired or refused URL, HTTP 403) so
+                // downloadWithResourceRefresh resolves the stream again, SABR first, instead of giving up.
+                throw DownloadTransferException(e)
             } catch (e: Throwable) {
                 target.delete()
                 throw e

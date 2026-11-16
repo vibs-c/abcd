@@ -364,6 +364,28 @@ Known gaps against the brief, not fixed now (planned):
   path (resolver → `downloadToFile` → decode → analyse) is exercised by an instrumented test that skips
   itself without network, and must be confirmed on the phone.
 
+## 2026-11-17 · Fix: out of memory while preparing a DJ session
+
+- **Problem:** Start DJ crashed with `OutOfMemoryError` in `MonoSink.ensureCapacity` (emulator, 192 MB
+  heap limit). Session preparation runs two tracks at once and only the native analysis was serialised,
+  so several whole-song float arrays (about 46 MB each for 4 min at 48 kHz) lived together, and the 2x
+  growth plus the final exact-size copy briefly needed two to three times a song's size.
+- **Decision:** `AnalysisGate` (dj-analysis) lets one decode + analyse run at a time across the app
+  (session prep, library analysis, Lab); downloads still overlap. `MonoSink` is sized from the track's
+  duration (+2%, capped at 30 min), grows by 1.5x if short, and hands its buffer over without copying:
+  `PcmAudio` gained `sampleCount`, and `NativeAnalyzer.analyzeJson` takes the frame count.
+- Analysis results are unchanged (same samples, same rate), so `ABCD_ANALYSIS_VERSION` stays.
+
+## 2026-11-17 · Fix: every pre-analysis download failed with HTTP 403
+
+- **Problem:** after stage 6, Start DJ ended with "Prepared 0 of 12 tracks". YouTube refused the first
+  (direct, non-SABR) stream URL with 403. `downloadWithResourceRefresh` retries with a fresh, SABR-first
+  stream only for a `DownloadTransferException`; Metrolist's `storeAudioFile` wraps transfer errors in
+  one, but stage 6's `AudioCacheManager.downloadToFile` threw the raw error, so the retry never ran.
+  Stage 6's tests skip on "YouTube did not serve the audio", which hid it.
+- **Decision:** `downloadToFile` wraps transfer errors exactly like `storeAudioFile`. Verified on the
+  emulator: 12 of 12 tracks prepared and playing; the real-download instrumented test now passes.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

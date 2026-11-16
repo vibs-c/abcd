@@ -70,7 +70,7 @@ class DjAnalysisInstrumentedTest {
             val file = File(inputDir, "abcd_synth.wav")
             assumeTrue("push abcd_synth.wav first", file.exists())
             val pcm = MediaCodecPcmDecoder(context).decodeToMono(AudioSource(file.absolutePath))
-            Log.i(TAG, "decoded ${pcm.samples.size} samples at ${pcm.sampleRate} Hz (${pcm.durationMs / 1000} s)")
+            Log.i(TAG, "decoded ${pcm.sampleCount} samples at ${pcm.sampleRate} Hz (${pcm.durationMs / 1000} s)")
             val result = NativeAudioAnalyzer().analyze(pcm)
             log(result)
 
@@ -96,12 +96,12 @@ class DjAnalysisInstrumentedTest {
             val file = inputDir.listFiles { f -> f.name.startsWith("abcd_song.") }?.firstOrNull()
             assumeTrue("push abcd_song.<ext> first", file != null)
             val pcm = MediaCodecPcmDecoder(context).decodeToMono(AudioSource(checkNotNull(file).absolutePath))
-            Log.i(TAG, "real song decoded: ${pcm.samples.size} samples at ${pcm.sampleRate} Hz (${pcm.durationMs / 1000} s)")
+            Log.i(TAG, "real song decoded: ${pcm.sampleCount} samples at ${pcm.sampleRate} Hz (${pcm.durationMs / 1000} s)")
             // Keep the decoded samples next to the input so the command-line analyser can be run on them
             // without decoding again: abcd_analyze_cli --raw abcd_song_decoded.f32 <rate>
             File(inputDir, "abcd_song_decoded.f32").outputStream().buffered().use { out ->
-                val bytes = ByteBuffer.allocate(pcm.samples.size * 4).order(ByteOrder.LITTLE_ENDIAN)
-                bytes.asFloatBuffer().put(pcm.samples)
+                val bytes = ByteBuffer.allocate(pcm.sampleCount * 4).order(ByteOrder.LITTLE_ENDIAN)
+                bytes.asFloatBuffer().put(pcm.samples, 0, pcm.sampleCount)
                 out.write(bytes.array())
             }
             val started = System.nanoTime()
