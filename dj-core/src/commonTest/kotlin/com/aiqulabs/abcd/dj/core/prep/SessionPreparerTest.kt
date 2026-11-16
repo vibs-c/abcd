@@ -6,6 +6,7 @@ import com.aiqulabs.abcd.dj.core.analysis.KeyResult
 import com.aiqulabs.abcd.dj.core.brain.PlaylistPlan
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -122,6 +123,31 @@ class SessionPreparerTest {
             assertEquals(1f, last.fraction)
             assertEquals(1, seen.first().current)
             assertTrue(seen.all { it.current in 1..4 }, "current never exceeds total")
+        }
+
+    @Test
+    fun progressMovesOneTrackAtATimeEvenWhenTracksRunInParallel() =
+        runTest {
+            val seen = mutableListOf<PreparationProgress>()
+            SessionPreparer(ScriptedPreparer(), parallelism = 2).prepare(plan(count = 6, core = 4)) { seen += it }
+            assertEquals(listOf(0, 1, 2, 3, 4), seen.map { it.ready }.distinct(), "the counter never skips a track")
+        }
+
+    @Test
+    fun aSlowTrackDoesNotHoldUpTheNextOne() =
+        runTest {
+            val started = mutableListOf<String>()
+            val preparer =
+                object : TrackPreparer {
+                    override suspend fun prepare(track: DjTrack): TrackPreparation {
+                        started += track.videoId
+                        if (track.videoId == "t1") delay(10_000)
+                        return TrackPreparation.Ready(fakeAnalysis(), alreadyKnown = false)
+                    }
+                }
+            val result = SessionPreparer(preparer, parallelism = 2).prepare(plan(count = 4, core = 4))
+            assertEquals(listOf("t1", "t2", "t3", "t4"), started, "t3 and t4 start while t1 is still running")
+            assertEquals(listOf("t1", "t2", "t3", "t4"), result.tracks.map { it.track.videoId }, "results stay in plan order")
         }
 
     @Test

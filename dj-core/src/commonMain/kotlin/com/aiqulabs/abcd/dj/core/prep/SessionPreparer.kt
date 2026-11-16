@@ -3,17 +3,20 @@ package com.aiqulabs.abcd.dj.core.prep
 import com.aiqulabs.abcd.dj.core.brain.PlaylistPlan
 import com.aiqulabs.abcd.dj.core.model.DjTrack
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Prepares a [PlaylistPlan] before playback (brief §5.1): every track needs an analysis. Tracks that
  * fail are dropped and replaced from the spares, in plan order, until the session has its core count of
  * ready tracks or the spares run out.
  *
- * Up to [parallelism] tracks are prepared at once, so one track's download overlaps another's analysis.
- * Results are collected in plan order, so the outcome does not depend on which finished first.
+ * Up to [parallelism] tracks are in flight at once, as a rolling window: as soon as one finishes the next
+ * one starts, so a download always overlaps the current analysis and one slow track never holds up the
+ * others. Progress is reported after every single track. A track is only started while it can still be
+ * needed (ready + in flight < core count), so spares stay untouched when nothing fails, and results are
+ * returned in plan order: the outcome does not depend on which track finished first.
  */
 class SessionPreparer(
     private val preparer: TrackPreparer,
@@ -22,42 +25,55 @@ class SessionPreparer(
     suspend fun prepare(
         plan: PlaylistPlan,
         onProgress: (PreparationProgress) -> Unit = {},
-    ): PreparedSession {
-        val total = minOf(plan.coreCount, plan.tracks.size)
-        val ready = ArrayList<PreparedTrack>()
-        val failed = ArrayList<DjTrack>()
-        var alreadyKnown = 0
-        var next = 0
+    ): PreparedSession =
+        coroutineScope {
+            val total = minOf(plan.coreCount, plan.tracks.size)
+            val window = parallelism.coerceAtLeast(1)
+            val ready = ArrayList<IndexedValue<PreparedTrack>>()
+            val failed = ArrayList<IndexedValue<DjTrack>>()
+            val inFlight = ArrayList<Int>()
+            val finished = Channel<Pair<Int, TrackPreparation>>(Channel.UNLIMITED)
+            var alreadyKnown = 0
+            var next = 0
 
-        fun report(currentTitle: String?) = onProgress(PreparationProgress(ready.size, total, alreadyKnown, failed.size, currentTitle))
-        report(plan.tracks.firstOrNull()?.title)
+            fun report() {
+                val working = inFlight.minOrNull() ?: next
+                onProgress(PreparationProgress(ready.size, total, alreadyKnown, failed.size, plan.tracks.getOrNull(working)?.title))
+            }
 
-        while (ready.size < total && next < plan.tracks.size) {
-            val batchSize = minOf(parallelism.coerceAtLeast(1), total - ready.size, plan.tracks.size - next)
-            val batch = plan.tracks.subList(next, next + batchSize).toList()
-            next += batchSize
-            report(batch.first().title)
-
-            val outcomes =
-                coroutineScope {
-                    batch.map { track -> async { track to prepareSafely(track) } }.awaitAll()
+            fun startMore() {
+                while (inFlight.size < window && ready.size + inFlight.size < total && next < plan.tracks.size) {
+                    val index = next++
+                    inFlight += index
+                    launch { finished.send(index to prepareSafely(plan.tracks[index])) }
                 }
-            for ((track, outcome) in outcomes) {
+            }
+
+            startMore()
+            report()
+            while (inFlight.isNotEmpty()) {
+                val (index, outcome) = finished.receive()
+                inFlight.remove(index)
+                val track = plan.tracks[index]
                 when (outcome) {
                     is TrackPreparation.Ready -> {
-                        ready += PreparedTrack(track, outcome.analysis)
+                        ready += IndexedValue(index, PreparedTrack(track, outcome.analysis))
                         if (outcome.alreadyKnown) alreadyKnown++
                     }
 
                     is TrackPreparation.Failed -> {
-                        failed += track
+                        failed += IndexedValue(index, track)
                     }
                 }
+                startMore()
+                report()
             }
-            report(plan.tracks.getOrNull(next)?.title)
+            PreparedSession(
+                plan,
+                ready.sortedBy { it.index }.map { it.value },
+                failed.sortedBy { it.index }.map { it.value },
+            )
         }
-        return PreparedSession(plan, ready, failed)
-    }
 
     /** An unexpected exception counts as a failed track; only cancellation stops the whole preparation. */
     private suspend fun prepareSafely(track: DjTrack): TrackPreparation =

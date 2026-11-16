@@ -23,6 +23,13 @@ internal class MonoSink(
     var size = 0
         private set
 
+
+    // Reused scratch arrays: the decoder's buffer is copied out in one bulk call per output buffer.
+    // Reading it one sample at a time through ShortBuffer.get() cost about 29 million calls for a
+    // 5-minute stereo song and made decoding several times slower than the analysis itself.
+    private var shortScratch = ShortArray(0)
+    private var floatScratch = FloatArray(0)
+
     fun append(
         buffer: ByteBuffer,
         encoding: Int,
@@ -31,22 +38,53 @@ internal class MonoSink(
         val channelCount = channels.coerceAtLeast(1)
         if (encoding == AudioFormat.ENCODING_PCM_FLOAT) {
             val floats = buffer.asFloatBuffer()
-            val frames = floats.remaining() / channelCount
+            val count = floats.remaining()
+            if (floatScratch.size < count) floatScratch = FloatArray(count)
+            floats.get(floatScratch, 0, count)
+            val frames = count / channelCount
             ensureCapacity(size + frames)
-            for (frame in 0 until frames) {
-                var sum = 0f
-                for (channel in 0 until channelCount) sum += floats.get()
-                data[size++] = sum / channelCount
+            val src = floatScratch
+            val out = data
+            var i = 0
+            var o = size
+            if (channelCount == 2) {
+                for (frame in 0 until frames) {
+                    out[o++] = (src[i] + src[i + 1]) * 0.5f
+                    i += 2
+                }
+            } else {
+                for (frame in 0 until frames) {
+                    var sum = 0f
+                    for (channel in 0 until channelCount) sum += src[i++]
+                    out[o++] = sum / channelCount
+                }
             }
+            size = o
         } else {
             val shorts = buffer.asShortBuffer()
-            val frames = shorts.remaining() / channelCount
+            val count = shorts.remaining()
+            if (shortScratch.size < count) shortScratch = ShortArray(count)
+            shorts.get(shortScratch, 0, count)
+            val frames = count / channelCount
             ensureCapacity(size + frames)
-            for (frame in 0 until frames) {
-                var sum = 0
-                for (channel in 0 until channelCount) sum += shorts.get()
-                data[size++] = sum / (channelCount * PCM16_SCALE)
+            val src = shortScratch
+            val out = data
+            val scale = 1f / (channelCount * PCM16_SCALE)
+            var i = 0
+            var o = size
+            if (channelCount == 2) {
+                for (frame in 0 until frames) {
+                    out[o++] = (src[i] + src[i + 1]) * scale
+                    i += 2
+                }
+            } else {
+                for (frame in 0 until frames) {
+                    var sum = 0
+                    for (channel in 0 until channelCount) sum += src[i++]
+                    out[o++] = sum * scale
+                }
             }
+            size = o
         }
     }
 

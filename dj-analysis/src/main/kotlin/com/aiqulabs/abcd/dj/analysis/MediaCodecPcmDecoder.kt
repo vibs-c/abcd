@@ -68,41 +68,48 @@ class MediaCodecPcmDecoder(
             var outputDone = false
             while (!outputDone) {
                 currentCoroutineContext().ensureActive()
-                if (!inputDone) {
-                    val index = codec.dequeueInputBuffer(TIMEOUT_US)
-                    if (index >= 0) {
-                        val buffer = checkNotNull(codec.getInputBuffer(index))
-                        val size = extractor.readSampleData(buffer, 0)
-                        if (size < 0) {
-                            codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            inputDone = true
-                        } else {
-                            codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
-                            extractor.advance()
-                        }
+                // Feed every input buffer the codec will take right now, without waiting.
+                while (!inputDone) {
+                    val index = codec.dequeueInputBuffer(0)
+                    if (index < 0) break
+                    val buffer = checkNotNull(codec.getInputBuffer(index))
+                    val size = extractor.readSampleData(buffer, 0)
+                    if (size < 0) {
+                        codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone = true
+                    } else {
+                        codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
+                        extractor.advance()
                     }
                 }
-                val out = codec.dequeueOutputBuffer(info, TIMEOUT_US)
-                when {
-                    out >= 0 -> {
-                        val buffer = checkNotNull(codec.getOutputBuffer(out))
-                        buffer.position(info.offset)
-                        buffer.limit(info.offset + info.size)
-                        sink.append(buffer.order(ByteOrder.nativeOrder()), encoding, channels)
-                        codec.releaseOutputBuffer(out, false)
-                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
-                    }
+                // Then take every decoded buffer that is ready; wait briefly only when none is.
+                var timeout = TIMEOUT_US
+                while (!outputDone) {
+                    val out = codec.dequeueOutputBuffer(info, timeout)
+                    timeout = 0
+                    when {
+                        out >= 0 -> {
+                            val buffer = checkNotNull(codec.getOutputBuffer(out))
+                            buffer.position(info.offset)
+                            buffer.limit(info.offset + info.size)
+                            sink.append(buffer.order(ByteOrder.nativeOrder()), encoding, channels)
+                            codec.releaseOutputBuffer(out, false)
+                            if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                        }
 
-                    out == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        val changed = codec.outputFormat
-                        channels = changed.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                        sampleRate = changed.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        encoding =
-                            if (changed.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
-                                changed.getInteger(MediaFormat.KEY_PCM_ENCODING)
-                            } else {
-                                AudioFormat.ENCODING_PCM_16BIT
-                            }
+                        out == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            val changed = codec.outputFormat
+                            channels = changed.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                            sampleRate = changed.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                            encoding =
+                                if (changed.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                                    changed.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                                } else {
+                                    AudioFormat.ENCODING_PCM_16BIT
+                                }
+                        }
+
+                        else -> break // INFO_TRY_AGAIN_LATER: go back and feed more input
                     }
                 }
             }
@@ -115,6 +122,7 @@ class MediaCodecPcmDecoder(
     }
 
     private companion object {
-        const val TIMEOUT_US = 10_000L
+        /** How long to wait for decoded audio when none is ready yet (only then). */
+        const val TIMEOUT_US = 5_000L
     }
 }

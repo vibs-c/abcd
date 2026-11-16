@@ -32,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -124,10 +125,17 @@ fun DjSetupScreen(
     contentPadding: PaddingValues = PaddingValues(),
 ) {
     val building = startState is DjStartState.Building || startState is DjStartState.Preparing
+    val scroll = rememberScrollState()
+    // The status card sits at the top, but "Start DJ" is near the bottom: bring the card into view when
+    // a mix starts or finishes, otherwise preparation looks frozen (only the greyed-out button is visible).
+    val statusShown = startState !is DjStartState.Idle
+    LaunchedEffect(startState::class, statusShown) {
+        if (statusShown) scroll.animateScrollTo(0)
+    }
     Column(
         modifier =
             modifier
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(contentPadding)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),

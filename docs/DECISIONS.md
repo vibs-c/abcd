@@ -386,6 +386,24 @@ Known gaps against the brief, not fixed now (planned):
 - **Decision:** `downloadToFile` wraps transfer errors exactly like `storeAudioFile`. Verified on the
   emulator: 12 of 12 tracks prepared and playing; the real-download instrumented test now passes.
 
+## 2026-11-17 · Preparation speed: where the time goes, and what was changed
+
+- **Measured** on the x86_64 emulator, one 5-minute Opus track: download 2-5 s, decode ~19 s, native
+  analysis ~3 s (resample 0.3, RhythmExtractor2013 multifeature 2.5, key 0.1, frames 0.2, structure ~0).
+  The C++ side is already built with -O2. Decoding dominated: ~0.6 ms per 20 ms Opus packet, split between
+  `MediaExtractor` (~5 s) and binder round trips to the platform Opus codec (~8 s), plus the per-sample
+  `ShortBuffer.get()` loop in `MonoSink`.
+- **Changed:** `MonoSink` copies each decoder buffer in one bulk call (append time ~0.1 s per song);
+  the decode loop feeds all free input buffers and drains all ready output before waiting. Decode is now
+  ~13 s per 5-min track; results are bit-identical on stereo input. `SessionPreparer` keeps a rolling window
+  of 2 tracks and reports progress after each one (it used to wait for the slower track of each pair), and
+  the setup screen scrolls to the "Preparing your mix" card when a mix starts: it sat above the fold, so
+  preparation looked frozen.
+- **Result:** 12 new tracks in ~190-200 s on the emulator (was 245 s), counter moving every ~15 s.
+- **Not done (needs approval):** decoding Opus in-process (Media3 Matroska extractor + the vendored libopus)
+  would remove the per-packet IPC, probably several times faster; starting playback before the whole
+  playlist is analysed is brief §5.1 v2 (runtime analysis).
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.
