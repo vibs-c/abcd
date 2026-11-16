@@ -441,6 +441,33 @@ Known gaps against the brief, not fixed now (planned):
   call, resumed after), End session (Metrolist back, paused on the previous song at its position, which
   then plays normally), and playing a normal song during a mix (DJ ends first, one stream).
 
+## 2026-11-17 · Stage 8c: code review of stages 1-8 (bugs, hangs, crashes)
+
+Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed:
+- **Visible failure reason.** "Preparing your mix" and the error card now show why the last song failed
+  (`PreparationProgress.lastFailureReason`, `DjStartState.Failed.detail`, `describeFailure()` = outer and root
+  cause). The owner's phone skips every song; this makes the cause readable without USB.
+- **Hangs.** Each song gets 4 min (`DjTrackPreparer`, `withTimeoutOrNull`) so one stalled download or
+  decode cannot freeze preparation ("stuck on the first track", 6b). Both decode loops (MediaCodec, libopus)
+  fail after 15 s without progress instead of looping forever.
+- **Corrupt downloads.** `DjAudioProvider` allows one download per song at a time (session prep, library
+  analysis and the engine's look-ahead could write the same `.part` file together).
+- **Files deleted under the playing mix.** The running mix's files are pinned: `prune` (a new mix being
+  prepared), library analysis `release()` and Lab "Delete files" leave them alone; a mix that replaces
+  another keeps the shared songs.
+- **Hand-over race.** A mix started while the previous one fades out no longer gets its media session,
+  card and saved Metrolist position taken away by the old mix's clean-up (`Leftovers` snapshot).
+- **Crash on a missing native library.** `NativeAudioAnalyzer` turns `UnsatisfiedLinkError` /
+  `ExceptionInInitializerError` into an exception, so a song fails instead of the app crashing.
+- **Unreadable analyses.** The C++ JSON writer writes 0 for NaN/inf (one bad value made a whole song fail).
+- **Decoder output format.** MediaCodec is asked for 16-bit PCM; other encodings fail clearly instead of
+  being read as garbage. Engine look-ahead no longer swallows coroutine cancellation.
+- Checked and fine: native indexing and exception wall, JSON locale, DB blob decoding, orderer empty-list
+  guards, manifest service types/permissions.
+- **Not changed (noted):** the DJ database has no migrations yet (fine at version 1; add them before any
+  schema change); library analysis and session preparation share `AnalysisGate`, so a running library
+  batch roughly halves preparation speed.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

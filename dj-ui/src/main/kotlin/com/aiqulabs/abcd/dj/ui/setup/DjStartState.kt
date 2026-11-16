@@ -24,6 +24,8 @@ sealed interface DjStartState {
     data class Failed(
         val reason: Reason,
         val foundCount: Int = 0,
+        /** Technical cause (e.g. why every song failed), shown small so the owner can report it. */
+        val detail: String? = null,
     ) : DjStartState
 
     enum class Reason {

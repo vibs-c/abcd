@@ -151,6 +151,16 @@ class SessionPreparerTest {
         }
 
     @Test
+    fun theReasonOfTheLastFailureIsReportedForTheScreen() =
+        runTest {
+            val seen = mutableListOf<PreparationProgress>()
+            val result = SessionPreparer(ScriptedPreparer(failing = setOf("t2")), parallelism = 1).prepare(plan(count = 6, core = 4)) { seen += it }
+            assertEquals("no stream", result.lastFailureReason)
+            assertEquals("no stream", seen.last().lastFailureReason)
+            assertEquals(null, SessionPreparer(ScriptedPreparer()).prepare(plan(count = 4, core = 4)).lastFailureReason)
+        }
+
+    @Test
     fun aPlanSmallerThanTheCoreCountUsesWhatItHas() =
         runTest {
             val result = SessionPreparer(ScriptedPreparer()).prepare(plan(count = 3, core = 10))

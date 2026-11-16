@@ -190,8 +190,10 @@ internal class OpusPcmDecoder(
                 val input = dequeueInput(opus)
                 input.addFlag(C.BUFFER_FLAG_END_OF_STREAM)
                 opus.queueInputBuffer(input)
+                val started = System.nanoTime()
                 while (!endOfStream) {
                     if (!drain(opus)) LockSupport.parkNanos(WAIT_NANOS)
+                    if (System.nanoTime() - started > STALL_TIMEOUT_NS) throw IOException("libopus did not finish (stalled)")
                 }
                 finished = true
                 val mono = sink ?: return null
@@ -210,9 +212,11 @@ internal class OpusPcmDecoder(
         }
 
         private fun dequeueInput(opus: OpusDecoder): DecoderInputBuffer {
+            val started = System.nanoTime()
             while (true) {
                 opus.dequeueInputBuffer()?.let { return it }
                 if (!drain(opus)) LockSupport.parkNanos(WAIT_NANOS)
+                if (System.nanoTime() - started > STALL_TIMEOUT_NS) throw IOException("libopus stopped taking input (stalled)")
             }
         }
 
@@ -314,6 +318,7 @@ internal class OpusPcmDecoder(
         const val BUFFERS = 16
         const val PACKET_BYTES = 8 * 1024
         const val WAIT_NANOS = 200_000L
+        const val STALL_TIMEOUT_NS = 15_000_000_000L
 
         /** Decoded audio shorter than this share of the container's duration counts as a failed decode. */
         const val MIN_COMPLETE_FRACTION = 0.9

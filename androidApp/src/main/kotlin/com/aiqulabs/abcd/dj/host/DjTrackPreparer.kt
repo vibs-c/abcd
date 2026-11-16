@@ -11,6 +11,7 @@ import com.aiqulabs.abcd.dj.core.prep.TrackPreparer
 import com.aiqulabs.abcd.dj.data.DjAnalysisRepository
 import com.metrolist.shared.model.SongItem
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 /**
@@ -34,13 +35,15 @@ internal class DjTrackPreparer(
             if (saved != null && saved.result.analysisVersion >= analyzer.analysisVersion) {
                 TrackPreparation.Ready(saved.result, alreadyKnown = true)
             } else {
-                analyseFresh(track)
+                // One stalled download or decoder must not freeze "Preparing your mix" on this song forever.
+                withTimeoutOrNull(TRACK_TIMEOUT_MS) { analyseFresh(track) }
+                    ?: TrackPreparation.Failed("Timed out after ${TRACK_TIMEOUT_MS / 60_000} min (download or decode stalled)")
             }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.tag(TAG).w(e, "Could not prepare %s (%s)", track.videoId, track.title)
-            TrackPreparation.Failed(e.message ?: e.javaClass.simpleName)
+            TrackPreparation.Failed(describeFailure(e))
         }
 
     private suspend fun analyseFresh(track: DjTrack): TrackPreparation {
@@ -88,5 +91,18 @@ internal class DjTrackPreparer(
 
     private companion object {
         const val TAG = "DjTrackPreparer"
+        const val TRACK_TIMEOUT_MS = 4 * 60_000L
     }
+}
+
+/**
+ * A short technical description of why something failed, for the screen and bug reports: the outermost
+ * and the root cause (e.g. "DownloadTransferException ← IllegalStateException: HTTP 403").
+ */
+internal fun describeFailure(e: Throwable): String {
+    var root = e
+    while (root.cause != null && root.cause !== root) root = root.cause!!
+    val outer = e.javaClass.simpleName
+    val inner = "${root.javaClass.simpleName}: ${root.message ?: "no message"}"
+    return (if (root === e) inner else "$outer ← $inner").take(180)
 }

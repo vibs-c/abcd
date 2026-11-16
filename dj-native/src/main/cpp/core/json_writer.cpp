@@ -1,5 +1,6 @@
 #include "json_writer.h"
 
+#include <cmath>
 #include <iomanip>
 #include <locale>
 #include <sstream>
@@ -31,7 +32,8 @@ public:
 
     void raw(const char* text) { out_ << text; }
     void key(const char* name) { comma(); out_ << '"' << name << "\":"; first_ = true; }
-    void number(double v) { out_ << v; first_ = false; }
+    // NaN/inf are not valid JSON; one bad value must not make a whole analysis unreadable.
+    void number(double v) { out_ << (std::isfinite(v) ? v : 0.0); first_ = false; }
     void integer(long v) { out_ << v; first_ = false; }
     void text(const std::string& v) { out_ << '"' << v << '"'; first_ = false; }  // names are plain ASCII
     void boolean(bool v) { out_ << (v ? "true" : "false"); first_ = false; }
@@ -52,7 +54,8 @@ public:
         out_ << '[';
         for (size_t i = 0; i < values.size(); ++i) {
             if (i) out_ << ',';
-            out_ << values[i];
+            const double v = static_cast<double>(values[i]);
+            if (std::isfinite(v)) out_ << values[i]; else out_ << 0;
         }
         out_ << ']';
         first_ = false;

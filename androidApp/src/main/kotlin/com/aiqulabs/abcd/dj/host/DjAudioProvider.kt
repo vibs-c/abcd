@@ -10,10 +10,13 @@ import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.state.GlobalYouTubeRepository
 import com.metrolist.shared.youtube.extraction.models.toContentHints
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A song's audio file for analysis (and, from stage 8, for the mixing engine).
@@ -24,10 +27,15 @@ import java.io.File
 internal class DjAudioFile(
     val location: String,
     val ownedFile: File?,
+    private val isPinned: (File) -> Boolean = { false },
 ) {
-    /** Deletes the file if abcd downloaded it. Never touches Metrolist's own audio. */
+    /**
+     * Deletes the file if abcd downloaded it and no running DJ mix still needs it ([DjAudioProvider.pin]).
+     * Never touches Metrolist's own audio.
+     */
     fun release() {
-        ownedFile?.delete()
+        val file = ownedFile ?: return
+        if (!isPinned(file)) file.delete()
     }
 }
 
@@ -60,6 +68,13 @@ internal class DjAudioProvider private constructor(
 ) : DjAudioSource {
     private val directory = File(context.cacheDir, DIRECTORY).apply { mkdirs() }
 
+    // One download per song at a time: session preparation, "Analyse my library" and the engine's look-ahead
+    // can ask for the same song together, and two writers on one `.part` file corrupt it.
+    private val songLocks = ConcurrentHashMap<String, Mutex>()
+
+    // Files the running DJ mix plays from; prune() and release() leave them alone.
+    @Volatile private var pinned: Set<String> = emptySet()
+
     override suspend fun acquire(
         song: SongItem,
         reuseMetrolistFile: Boolean,
@@ -72,17 +87,25 @@ internal class DjAudioProvider private constructor(
                 }
             }
             val target = fileFor(song.id)
-            if (target.length() >= MIN_USABLE_BYTES) return@withContext DjAudioFile(Uri.fromFile(target).toString(), target)
-            download(song, target)
-            DjAudioFile(Uri.fromFile(target).toString(), target)
+            songLocks.getOrPut(song.id) { Mutex() }.withLock {
+                if (target.length() < MIN_USABLE_BYTES) download(song, target)
+            }
+            DjAudioFile(Uri.fromFile(target).toString(), target, ::isPinned)
         }
+
+    /** Protects the files of [videoIds] (the mix that is playing) from [prune] and [DjAudioFile.release]. */
+    fun pin(videoIds: Set<String>) {
+        pinned = videoIds.mapTo(HashSet()) { fileFor(it).name }
+    }
+
+    private fun isPinned(file: File): Boolean = file.name in pinned
 
     private suspend fun download(
         song: SongItem,
         target: File,
     ) {
         val resolver = GlobalYouTubeRepository.streamResolver ?: error("The stream resolver is not ready")
-        val partial = File(target.path + ".part")
+        val partial = File(target.path + PART_SUFFIX)
         val started = System.nanoTime()
         downloadWithResourceRefresh(
             resolve = { refresh ->
@@ -102,8 +125,8 @@ internal class DjAudioProvider private constructor(
 
     /** Deletes every downloaded file except those of [keepVideoIds] (the new session's tracks) and stale leftovers. */
     fun prune(keepVideoIds: Set<String>) {
-        val keep = keepVideoIds.mapTo(HashSet()) { fileFor(it).name }
-        directory.listFiles()?.forEach { file -> if (file.name !in keep) file.delete() }
+        val keep = keepVideoIds.mapTo(HashSet()) { fileFor(it).name } + pinned
+        directory.listFiles()?.forEach { file -> if (file.name !in keep && !file.name.endsWith(PART_SUFFIX)) file.delete() }
     }
 
     /** Total size of the files abcd downloaded, for the Lab. */
@@ -111,7 +134,7 @@ internal class DjAudioProvider private constructor(
 
     /** Deletes everything abcd downloaded. */
     fun clear() {
-        directory.listFiles()?.forEach { it.delete() }
+        directory.listFiles()?.forEach { if (!isPinned(it)) it.delete() }
     }
 
     /** True when the phone has room for [trackCount] more downloads plus a safety margin. */
@@ -122,6 +145,7 @@ internal class DjAudioProvider private constructor(
     companion object {
         private const val TAG = "DjAudioProvider"
         private const val DIRECTORY = "dj-audio"
+        private const val PART_SUFFIX = ".part"
 
         /** A real audio file is far bigger than this; smaller means a broken download. */
         private const val MIN_USABLE_BYTES = 4096L

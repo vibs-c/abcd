@@ -34,11 +34,12 @@ class SessionPreparer(
             val inFlight = ArrayList<Int>()
             val finished = Channel<Pair<Int, TrackPreparation>>(Channel.UNLIMITED)
             var alreadyKnown = 0
+            var lastFailure: String? = null
             var next = 0
 
             fun report() {
                 val working = inFlight.minOrNull() ?: next
-                onProgress(PreparationProgress(ready.size, total, alreadyKnown, failed.size, plan.tracks.getOrNull(working)?.title))
+                onProgress(PreparationProgress(ready.size, total, alreadyKnown, failed.size, plan.tracks.getOrNull(working)?.title, lastFailure))
             }
 
             fun startMore() {
@@ -63,6 +64,7 @@ class SessionPreparer(
 
                     is TrackPreparation.Failed -> {
                         failed += IndexedValue(index, track)
+                        lastFailure = outcome.reason
                     }
                 }
                 startMore()
@@ -72,6 +74,7 @@ class SessionPreparer(
                 plan,
                 ready.sortedBy { it.index }.map { it.value },
                 failed.sortedBy { it.index }.map { it.value },
+                lastFailure,
             )
         }
 

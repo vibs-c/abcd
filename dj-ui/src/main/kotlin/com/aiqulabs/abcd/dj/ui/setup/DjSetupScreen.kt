@@ -59,6 +59,7 @@ import com.metrolist.shared.generated.resources.dj_cancel
 import com.metrolist.shared.generated.resources.dj_failed_error
 import com.metrolist.shared.generated.resources.dj_failed_not_enough
 import com.metrolist.shared.generated.resources.dj_failed_storage
+import com.metrolist.shared.generated.resources.dj_failure_detail
 import com.metrolist.shared.generated.resources.dj_failed_title
 import com.metrolist.shared.generated.resources.dj_hint_choose_language
 import com.metrolist.shared.generated.resources.dj_hint_choose_mood
@@ -403,6 +404,7 @@ private fun StatusCard(
                     },
                 error = true,
                 onDismiss = onDismiss,
+                detail = state.detail?.let { stringResource(Res.string.dj_failure_detail, it) },
             )
         }
     }
@@ -444,6 +446,15 @@ private fun PreparingCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                progress.lastFailureReason?.let {
+                    Text(
+                        stringResource(Res.string.dj_failure_detail, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Text(
                 stringResource(Res.string.dj_preparing_hint),
@@ -461,6 +472,7 @@ private fun ResultCard(
     message: String,
     error: Boolean,
     onDismiss: () -> Unit,
+    detail: String? = null,
 ) {
     val colors =
         if (error) {
@@ -478,6 +490,7 @@ private fun ResultCard(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(message, style = MaterialTheme.typography.bodyMedium)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

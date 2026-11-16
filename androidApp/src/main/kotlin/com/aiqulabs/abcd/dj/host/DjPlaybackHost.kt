@@ -111,10 +111,12 @@ internal class DjPlaybackHost(
         }
         // A new mix replaces the one playing (it kept playing while the new one was prepared).
         val earlierPosition = if (engine != null) savedPositionMs else null
-        if (engine != null) exitNow()
+        val nextIds = tracks.mapTo(HashSet()) { it.track.videoId }
+        if (engine != null) exitNow(keepFilesOf = nextIds)
         isEntering = true
         try {
             this.songs = songs
+            DjAudioProvider.get(context).pin(nextIds)
             // Metrolist is already stopped when one mix replaces another; keep the position from before the first.
             savedPositionMs = ops.stopNormalPlayback() ?: earlierPosition
             val newEngine = ExoDjMixEngine(context, source) { requests }
@@ -148,33 +150,59 @@ internal class DjPlaybackHost(
         val ending = engine ?: return
         engine = null
         stopObserving()
+        val leftovers = detach()
         scope.launch {
             ending.end(fadeOutMs)
-            handBack(restoreNormal)
+            handBack(leftovers, restoreNormal)
             then?.invoke()
         }
     }
 
-    /** Immediate exit without a fade, for the service being destroyed. */
-    fun exitNow() {
+    /** Immediate exit without a fade (service destroyed, or a new mix replacing this one). */
+    fun exitNow(keepFilesOf: Set<String> = emptySet()) {
         val ending = engine ?: return
         engine = null
         stopObserving()
+        val leftovers = detach()
         ending.close()
-        handBack(restoreNormal = false)
+        handBack(leftovers, restoreNormal = false, keepFilesOf = keepFilesOf)
     }
 
-    private fun handBack(restoreNormal: Boolean) {
-        ops.setSessionPlayer(null)
-        DjPlayback.publish(null)
-        // The "Your mix is playing" result belongs to the mix that just ended.
-        DjController.dismissResult()
-        val position = savedPositionMs
+    /** What an ending mix leaves behind, taken at once so a new mix started during the fade-out keeps its own. */
+    private class Leftovers(
+        val savedPositionMs: Long?,
+        val files: List<DjAudioFile>,
+    )
+
+    private fun detach(): Leftovers {
+        val leftovers = Leftovers(savedPositionMs, files.values.toList())
         savedPositionMs = null
-        if (restoreNormal && position != null) ops.restoreNormalPlayback(position)
-        files.values.forEach { it.release() }
         files.clear()
         songs = emptyMap()
+        return leftovers
+    }
+
+    /**
+     * Gives the session back to Metrolist. If a new mix started while this one faded out, the session, the
+     * card and the pinned files belong to the new mix: only the old files go, and Metrolist's position from
+     * before the first mix is handed on so the new mix can restore it when it ends.
+     */
+    private fun handBack(
+        leftovers: Leftovers,
+        restoreNormal: Boolean,
+        keepFilesOf: Set<String> = emptySet(),
+    ) {
+        if (engine == null) {
+            ops.setSessionPlayer(null)
+            DjPlayback.publish(null)
+            // The "Your mix is playing" result belongs to the mix that just ended.
+            DjController.dismissResult()
+            if (restoreNormal) leftovers.savedPositionMs?.let(ops::restoreNormalPlayback)
+            DjAudioProvider.get(context).pin(keepFilesOf)
+        } else if (savedPositionMs == null) {
+            savedPositionMs = leftovers.savedPositionMs
+        }
+        leftovers.files.forEach { it.release() }
         Timber.tag(TAG).i("DJ Mode off")
     }
 

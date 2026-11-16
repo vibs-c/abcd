@@ -11,6 +11,7 @@ import com.aiqulabs.abcd.dj.core.mix.ClassicFadePlanner
 import com.aiqulabs.abcd.dj.core.mix.EqualPowerFade
 import com.aiqulabs.abcd.dj.core.mix.TransitionPlan
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -307,7 +308,15 @@ class ExoDjMixEngine(
         while (index < tracks.size) {
             if (index !in unplayable) {
                 val track = tracks[index]
-                val uri = runCatching { source.open(track.track) }.getOrNull()
+                val uri =
+                    try {
+                        source.open(track.track)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "No file for track $index", e)
+                        null
+                    }
                 if (ending || released) return -1
                 if (uri != null) {
                     d[deck].load(track, index, uri, entryFor(index))

@@ -15,7 +15,7 @@ sealed interface TrackPreparation {
         val alreadyKnown: Boolean,
     ) : TrackPreparation
 
-    /** The track cannot be used (unavailable stream, decode error, no space...). [reason] is for logs, not for users. */
+    /** The track cannot be used (unavailable stream, decode error, no space...). [reason] is technical, for bug reports. */
     data class Failed(
         val reason: String,
     ) : TrackPreparation
@@ -42,6 +42,8 @@ data class PreparationProgress(
     val alreadyKnown: Int = 0,
     val failed: Int = 0,
     val currentTitle: String? = null,
+    /** Why the most recent failed track failed (technical; shown small so the owner can report it). */
+    val lastFailureReason: String? = null,
 ) {
     /** The 1-based number of the track being worked on, never above [total]. */
     val current: Int get() = (ready + 1).coerceAtMost(total.coerceAtLeast(1))
@@ -64,6 +66,8 @@ data class PreparedSession(
     val plan: PlaylistPlan,
     val tracks: List<PreparedTrack>,
     val failed: List<DjTrack>,
+    /** Why the last failed track failed, if any (technical). */
+    val lastFailureReason: String? = null,
 ) {
     /** True when fewer tracks than the session needs could be prepared. */
     val isShort: Boolean get() = tracks.size < plan.coreCount

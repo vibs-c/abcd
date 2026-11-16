@@ -5547,6 +5547,9 @@
     </plurals>
     <string name="dj_preparing_hint">The first mix takes a few minutes. Songs stay analysed, so the next mix starts much faster.</string>
 
+    <!-- abcd DJ Mode: technical failure reason, shown small for bug reports -->
+    <string name="dj_failure_detail">Reason: %1$s</string>
+
     <!-- abcd DJ Mode: Lab problem report -->
     <string name="dj_lab_log_title">Problem report</string>
     <string name="dj_lab_log_desc">Copies the recent DJ log (which songs failed and why) so you can paste it into a bug report. Nothing is sent anywhere.</string>

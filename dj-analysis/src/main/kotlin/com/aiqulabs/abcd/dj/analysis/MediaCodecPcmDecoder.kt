@@ -78,6 +78,8 @@ class MediaCodecPcmDecoder(
         val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else -1L
         val sink = MonoSink(MonoSink.capacityFor(durationUs, sampleRate))
 
+        // Ask for 16-bit output: some phones' decoders otherwise pick another PCM format (MonoSink reads 16-bit and float).
+        format.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
         val codec = MediaCodec.createDecoderByType(mime)
         try {
             codec.configure(format, null, null, 0)
@@ -85,8 +87,11 @@ class MediaCodecPcmDecoder(
             val info = MediaCodec.BufferInfo()
             var inputDone = false
             var outputDone = false
+            var lastProgressNs = System.nanoTime()
             while (!outputDone) {
                 currentCoroutineContext().ensureActive()
+                // A decoder that stops producing output (seen on some phones) must not hang preparation forever.
+                if (System.nanoTime() - lastProgressNs > STALL_TIMEOUT_NS) throw IOException("Decoder stalled (no output for 15 s)")
                 // Feed every input buffer the codec will take right now, without waiting.
                 while (!inputDone) {
                     val index = codec.dequeueInputBuffer(0)
@@ -100,6 +105,7 @@ class MediaCodecPcmDecoder(
                         codec.queueInputBuffer(index, 0, size, extractor.sampleTime, 0)
                         extractor.advance()
                     }
+                    lastProgressNs = System.nanoTime()
                 }
                 // Then take every decoded buffer that is ready; wait briefly only when none is.
                 var timeout = TIMEOUT_US
@@ -113,6 +119,7 @@ class MediaCodecPcmDecoder(
                             buffer.limit(info.offset + info.size)
                             sink.append(buffer.order(ByteOrder.nativeOrder()), encoding, channels)
                             codec.releaseOutputBuffer(out, false)
+                            lastProgressNs = System.nanoTime()
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
                         }
 
@@ -126,6 +133,9 @@ class MediaCodecPcmDecoder(
                                 } else {
                                     AudioFormat.ENCODING_PCM_16BIT
                                 }
+                            if (encoding != AudioFormat.ENCODING_PCM_16BIT && encoding != AudioFormat.ENCODING_PCM_FLOAT) {
+                                throw IOException("Unsupported decoder output (PCM encoding $encoding)")
+                            }
                         }
 
                         else -> break // INFO_TRY_AGAIN_LATER: go back and feed more input
@@ -142,6 +152,7 @@ class MediaCodecPcmDecoder(
 
     private companion object {
         const val TAG = "AbcdDecoder"
+        const val STALL_TIMEOUT_NS = 15_000_000_000L
 
         /** How long to wait for decoded audio when none is ready yet (only then). */
         const val TIMEOUT_US = 5_000L

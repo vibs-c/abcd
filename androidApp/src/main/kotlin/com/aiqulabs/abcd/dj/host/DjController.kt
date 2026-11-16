@@ -12,8 +12,6 @@ import com.aiqulabs.abcd.dj.core.tagging.MetadataTrackTagger
 import com.aiqulabs.abcd.dj.data.DjData
 import com.aiqulabs.abcd.dj.ui.setup.DjStartState
 import com.metrolist.android.playback.PlayerConnection
-import com.metrolist.shared.generated.resources.Res
-import com.metrolist.shared.generated.resources.dj_queue_title
 import com.metrolist.shared.settings.BlockedContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,13 +23,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.getString
 import timber.log.Timber
 
 /**
  * Runs "Start DJ": builds the playlist from the setup choices (stage 3), analyses every track before
- * playback (stage 6, brief §5.1), orders the analysed tracks (brief §7.2) and hands them to Metrolist's
- * normal player. The mixing engine (stage 8) later replaces the hand-off, not these steps.
+ * playback (stage 6, brief §5.1), orders the analysed tracks (brief §7.2) and hands them to the DJ engine
+ * through [DjPlayback] (stage 8).
  *
  * Application-wide on purpose: the work keeps running if the user switches tabs, and its progress is
  * shown again when they come back.
@@ -65,7 +62,7 @@ object DjController {
                         throw e
                     } catch (e: Exception) {
                         Timber.tag(TAG).w(e, "Building the DJ mix failed")
-                        DjStartState.Failed(DjStartState.Reason.ERROR)
+                        DjStartState.Failed(DjStartState.Reason.ERROR, detail = describeFailure(e))
                     }
                 mutableState.value = result
             }
@@ -137,7 +134,7 @@ object DjController {
             // Nothing at all could be analysed: most likely a connection problem rather than a thin catalogue.
             val noneWorked = prepared.tracks.isEmpty() && prepared.failed.isNotEmpty()
             val reason = if (noneWorked) DjStartState.Reason.ERROR else DjStartState.Reason.NOT_ENOUGH_SONGS
-            return DjStartState.Failed(reason, foundCount = prepared.tracks.size)
+            return DjStartState.Failed(reason, foundCount = prepared.tracks.size, detail = prepared.lastFailureReason)
         }
 
         val ordered = PlaylistOrderer().order(prepared.tracks, plan.settings)

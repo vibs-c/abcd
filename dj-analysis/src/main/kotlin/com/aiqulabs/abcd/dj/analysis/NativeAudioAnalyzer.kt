@@ -18,12 +18,25 @@ import kotlinx.coroutines.withContext
 class NativeAudioAnalyzer(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : AudioAnalyzer {
-    override val analysisVersion: Int get() = NativeAnalyzer.analysisVersion()
+    override val analysisVersion: Int get() = native { NativeAnalyzer.analysisVersion() }
+
+    /**
+     * A missing or broken native library throws an Error (UnsatisfiedLinkError) that ordinary `catch (e: Exception)`
+     * blocks miss, which would crash the app. Turn it into an exception so the song (or the Lab) fails cleanly.
+     */
+    private inline fun <T> native(block: () -> T): T =
+        try {
+            block()
+        } catch (e: LinkageError) {
+            throw IllegalStateException("Native analysis library unavailable on this device: ${e.message}", e)
+        } catch (e: ExceptionInInitializerError) {
+            throw IllegalStateException("Native analysis library failed to load: ${e.message}", e)
+        }
 
     override suspend fun analyze(pcm: PcmAudio): AnalysisResult =
         nativeLock.withLock {
             withContext(dispatcher) {
-                AnalysisResult.fromWireJson(NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleCount, pcm.sampleRate))
+                AnalysisResult.fromWireJson(native { NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleCount, pcm.sampleRate) })
             }
         }
 

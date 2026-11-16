@@ -105,6 +105,9 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
 - **Check:** a DJ session plays continuously with smooth fades. Then exit DJ Mode and play a normal
   song: normal Metrolist playback must still work. This is the most important check in the plan.
 
+- **8b/8c:** decoder safety net and Lab "Copy DJ log" (8b); code review of stages 1-8 with fixes (8c, see
+  DECISIONS.md). APK `apk/abcd-stage-8c.apk`.
+
 ## 9. Beat-matching and chorus jumps · Opus · ⬜ (brief §9.2, §9.3)
 
 - v1 techniques (beatmatched blend, echo out, chorus jump; classic fade as fallback), the technique
