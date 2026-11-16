@@ -21,6 +21,8 @@ be merged later. New DJ code lives in the `dj-*` modules and is not listed here.
 | `androidApp/.../playback/AudioCacheManager.kt` | New public `downloadToFile(resource, target, control, onProgress)`: about 55 added lines after `downloadSong`; nothing existing changed. Transfer failures are wrapped in `DownloadTransferException` like `storeAudioFile` does, so a refused URL is resolved again (SABR first) | Pre-analysis downloads a song's audio into abcd's own folder without touching Metrolist's cache, library or downloads (stage 6, owner chose this over scraping the cache) |
 | `androidApp/src/main/AndroidManifest.xml` | New `<service>` entry `com.aiqulabs.abcd.dj.host.DjAnalysisService` (`dataSync`, same type Metrolist's `DownloadService` uses; the permission was already declared) | "Analyse my library" runs in a foreground service with a progress notification (brief §5.1) |
 | `shared/.../composeResources/values/strings.xml` | ~40 more `dj_*` strings (preparing screen, library analysis, DJ audio files) | Stage 6 screens |
+| `opusDecoder/build.gradle.kts` | `opusAbis` adds `x86_64` only when `-Pabcd.opusX86=true` is passed; default ABIs unchanged | Test in-process Opus decoding for DJ analysis on the x86_64 emulator (stage 6c) |
+| `gradle/libs.versions.toml` | New alias `media3-extractor` (same Media3 version, already in the app through ExoPlayer) | `dj-analysis` reads WebM with Media3's Matroska extractor (stage 6c) |
 | `.gitmodules` | Two new submodules: `dj-native/third_party/essentia`, `dj-native/third_party/eigen` | Audio analysis libraries (stage 4) |
 | `README.md` | abcd section added at the top; Metrolist's README kept below | Credits (brief §2.2) |
 | `CLAUDE.md` | Replaced with the abcd agent guide | Brief §3.4 |

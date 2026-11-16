@@ -11,7 +11,10 @@ val opusNdkVersion = libs.versions.androidNdk.get()
 val opusCmakeVersion = "4.1.2"
 
 // x86 devices fall back to the platform decoder; shipping only ARM keeps the APK small.
-val opusAbis = listOf("arm64-v8a", "armeabi-v7a")
+// abcd: `-Pabcd.opusX86=true` also builds x86_64, only to test in-process decoding on the emulator.
+val opusAbis =
+    listOf("arm64-v8a", "armeabi-v7a") +
+        if (providers.gradleProperty("abcd.opusX86").orNull == "true") listOf("x86_64") else emptyList()
 
 android {
     namespace = "com.metrolist.opus"

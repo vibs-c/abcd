@@ -48,6 +48,7 @@ stage 7 is design-only and waits for the owner's "Approved".
 .\gradlew.bat :androidApp:installDebug           # install on a connected phone
 .\gradlew.bat :dj-core:jvmTest :dj-analysis:testDebugUnitTest   # DJ unit tests
 git submodule update --init                      # needed once: libopus, metroproto, Essentia, Eigen
+.\gradlew.bat :shared:kspAndroidMain --rerun     # if MusicDatabaseConstructor has "no actual" (stale Room KSP state)
 ```
 
 - Native analysis is tested on the emulator AVD `test` (x86_64): see `dj-native/README.md`. Use `adb` +
@@ -65,7 +66,7 @@ git submodule update --init                      # needed once: libopus, metropr
 |---|---|---|
 | `androidApp` | Metrolist Android app: UI, `MusicService`, ExoPlayer, nav, Koin DI | Minimal edits only; log each in `docs/UPSTREAM_CHANGES.md` |
 | `shared` | KMP: commonMain UI/logic, Room `MusicDatabase`, settings, YouTube repository | Do not change schema; DJ uses its own DB |
-| `opusDecoder` | Vendored Media3 libopus JNI (CMake, ARM only) | Untouched |
+| `opusDecoder` | Vendored Media3 libopus JNI (CMake, ARM only) | Code untouched; `dj-analysis` uses it. `-Pabcd.opusX86=true` adds x86_64 for emulator tests |
 | `listenTogetherProto`, `metroproto` | Protobuf | Untouched |
 | `desktopApp`, `iosApp` | Other platforms | Out of scope for now |
 | InnerTubeX | External JitPack dependency (the brief's `innertube/`) | Not in this repo |
@@ -76,7 +77,7 @@ DJ modules (brief §10; package `com.aiqulabs.abcd.dj.<module>`):
 |---|---|---|---|
 | `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, `SessionPreparer`, `PlaylistOrderer` + `ScoringConfig`; later technique selection | Has code + tests (stage 6) |
 | `dj-native` | Android lib | C++ via CMake/NDK: Essentia-based analysis, JNI; `core/` is portable C++ (no JNI/Android). See `dj-native/README.md` | Analysis done (effect DSP comes in stage 8) |
-| `dj-analysis` | Android lib | `MediaCodecPcmDecoder`, `NativeAudioAnalyzer` (one native analysis at a time) | Done (pre-analysis lives in the host glue, stage 6) |
+| `dj-analysis` | Android lib | `MediaCodecPcmDecoder` (tries `OpusPcmDecoder`: in-process libopus for WebM/Opus, ~15x faster), `NativeAudioAnalyzer`, `AnalysisGate` (one decode+analysis at a time) | Done (pre-analysis lives in the host glue, stage 6) |
 | `dj-data` | KMP, Android target only | Separate Room DB `abcd_dj.db` (all v1 entities), DAO, `DjAnalysisRepository`, `DjData`, `DjSetupStore`; exported schema in `schemas/` | Done (stage 5) |
 | `dj-engine` | Android lib | `DjMixEngine`, two decks, AudioProcessors, sync loop | Empty (stage 8) |
 | `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup (3), Lab (5), Preparing card + library analysis card (6) |

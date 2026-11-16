@@ -404,6 +404,20 @@ Known gaps against the brief, not fixed now (planned):
   would remove the per-packet IPC, probably several times faster; starting playback before the whole
   playlist is analysed is brief §5.1 v2 (runtime analysis).
 
+## 2026-11-17 · In-app Opus decoding for analysis (owner approved)
+
+- **Decision:** `OpusPcmDecoder` (dj-analysis) decodes WebM/Opus in-process: Media3's `MatroskaExtractor`
+  (flag `FLAG_DISABLE_SEEK_FOR_CUES`, read straight through) feeds Media3's libopus `OpusDecoder` from the
+  vendored `:opusDecoder` module, 16-bit output like the platform decoder. `MediaCodecPcmDecoder` tries it
+  first and falls back to MediaExtractor + MediaCodec for M4A/AAC, when libopus is missing (x86), or on any
+  error. No new third-party code: Media3 extractor (Apache-2.0) and libopus (BSD) already ship in the app.
+- **Result (emulator):** a 5-min track decodes in ~1 s instead of 13-19 s; analysis identical (same BPM,
+  key, LUFS, sections, main chorus; 237 fewer samples because libopus trims the encoder pre-skip).
+  12 new tracks prepare in 45 s (245 s before stage 6b/6c, ~195 s after 6c's first changes).
+- **Emulator:** libopus is ARM-only by default; build with `-Pabcd.opusX86=true` to include x86_64. The
+  phone APK is unaffected. Gradle property changes can leave Room's KSP output stale ("MusicDatabaseConstructor
+  has no actual"): run `:shared:kspAndroidMain --rerun`.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

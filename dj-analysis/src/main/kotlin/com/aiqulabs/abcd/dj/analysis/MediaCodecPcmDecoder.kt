@@ -6,9 +6,11 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.util.Log
 import com.aiqulabs.abcd.dj.core.analysis.AudioSource
 import com.aiqulabs.abcd.dj.core.analysis.PcmAudio
 import com.aiqulabs.abcd.dj.core.analysis.PcmDecoder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -17,9 +19,10 @@ import java.io.IOException
 import java.nio.ByteOrder
 
 /**
- * Decodes any audio file Android can play (Opus/WebM, AAC/M4A, MP3, ...) to mono float PCM with
- * [MediaExtractor] and [MediaCodec] (brief §5.2). The sample rate is left as the file's own; the
- * native analyzer resamples.
+ * Decodes any audio file Android can play (Opus/WebM, AAC/M4A, MP3, ...) to mono float PCM (brief §5.2).
+ * WebM/Opus goes through [OpusPcmDecoder] (in-process libopus, several times faster) when libopus is built
+ * for this CPU; everything else, and any file that path cannot read, uses [MediaExtractor] and
+ * [MediaCodec]. The sample rate is left as the file's own; the native analyzer resamples.
  *
  * Accepts a file path, or a `file://`, `content://` or `http(s)://` URI string.
  */
@@ -27,8 +30,23 @@ class MediaCodecPcmDecoder(
     context: Context,
 ) : PcmDecoder {
     private val appContext = context.applicationContext
+    private val opus = OpusPcmDecoder(appContext)
 
     override suspend fun decodeToMono(source: AudioSource): PcmAudio =
+        withContext(Dispatchers.IO) {
+            val inApp =
+                try {
+                    opus.decodeOrNull(source)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "In-app Opus decoding failed, using the platform decoder", e)
+                    null
+                }
+            inApp ?: decodeWithMediaCodec(source)
+        }
+
+    private suspend fun decodeWithMediaCodec(source: AudioSource): PcmAudio =
         withContext(Dispatchers.IO) {
             val extractor = MediaExtractor()
             try {
@@ -122,6 +140,8 @@ class MediaCodecPcmDecoder(
     }
 
     private companion object {
+        const val TAG = "AbcdDecoder"
+
         /** How long to wait for decoded audio when none is ready yet (only then). */
         const val TIMEOUT_US = 5_000L
     }
