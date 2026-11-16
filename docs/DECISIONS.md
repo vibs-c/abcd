@@ -75,16 +75,46 @@ Discord button and lyrics-API referrers also point at Metrolist. See `docs/STAGE
   playback/cache classes live in `androidApp` (several are `internal`). New files in a separate
   package keep upstream merges clean.
 
-## 2026-11-16 · Analysis audio comes from a temporary full download, deleted after analysis
+## 2026-11-16 · Session audio is downloaded once, kept on device until the track has played, then deleted
 
-- **Decision (for stages 4/6):** analyse from the cached/downloaded file when one exists. Otherwise
-  download the audio with Metrolist's existing download code into our own temp directory, decode,
-  analyse, then delete the file. Only analysis results are stored (brief §2.5).
-- **Alternatives:** `MediaExtractor` on the stream URL (brief §5.2).
-- **Reason:** SABR streams cannot be opened by `MediaExtractor` from a URL. Cost: each new track is a
-  full audio download (roughly 3–6 MB), so preparing an 18-track mix uses about 50–100 MB of data
-  the first time. Re-using Metrolist's cache would count against the user's cache budget and show up
-  in Storage, so we keep our own temp files.
+- **Decision (stages 4, 6, 8):** for every track in a prepared mix, get a full audio file (reuse
+  Metrolist's cached/downloaded file if one exists, otherwise download it with Metrolist's existing
+  download code into our own session folder). Analyse it from that file, and **also play it from that
+  file** during the session. Delete our copy when the track has finished playing (or was removed from
+  the queue), and sweep leftovers when a session ends or the app starts. Only analysis results are
+  kept long term (brief §2.5). Files Metrolist already had are never deleted by us.
+- **Alternatives:** `MediaExtractor` on the stream URL (brief §5.2); analyse then delete, then
+  stream again at play time.
+- **Reason (owner's idea):** SABR streams cannot be opened by `MediaExtractor` from a URL. Playing
+  from local files also removes network stalls and dropouts mid-mix (the main risk for "no dead air"
+  on car trips), and gives the engine seekable files, which beat-aligned entry points and chorus
+  jumps need. Costs: each new track is a 3–6 MB download, and a 4-hour session holds up to
+  roughly 60 tracks (about 300 MB) at once until they play. Mitigation: a session folder with
+  delete-after-play, a visible "Preparing your mix" download step, and a storage check before
+  starting. This is a v1 simplification; brief §2.7 says not to optimise storage yet.
+- **Effect on later stages:** stage 6 prepares files as well as analysis; stage 7 designs decks that
+  play local files (affects the Media3 data-source choice); stage 12 tests the cleanup paths.
+
+## 2026-11-16 · The app is branded abcd everywhere users see it
+
+- **Decision:** replaced "Metrolist" with "abcd" in all 58 locale string catalogs (1,514 lines) and
+  two visible code literals. Kept "Metrolist" in: the credits and licence lines
+  (`credits_creator`, `credits_license_desc`, `account_menu_license`), the standalone-Metrolist
+  migration text, and the Discord "Visit Metrolist" button (it links to Metrolist's repository, so
+  the label stays honest).
+- **Left unchanged on purpose:** third-party identifiers (`User-Agent` for the Paxsenix lyrics
+  provider, ListenBrainz `submission_client`, OpenRouter `X-Title`/`HTTP-Referer`), because services may
+  allow-list them; the About screen links to Metrolist's repository as upstream credit; external
+  folder names `Metrolist/Downloads`; internal style and class names; non-Latin transliterations of
+  the name in translations, if any.
+
+## 2026-11-16 · In-app update check is off
+
+- **Decision:** `AppUpdateManager.UPDATES_ENABLED = false` (guards the only network call) and the
+  `checkForUpdates` default is `false`. The Updates screen still opens and says "up to date".
+- **Reason:** the checker polls Metrolist's GitHub releases and abcd shares Metrolist's version
+  number, so it would offer Metrolist's APK as an "update". Turn it back on after pointing
+  `RELEASES_URL` at abcd's own releases (a network endpoint change; ask first).
 
 ## 2026-11-16 · Brief's module names mapped onto the KMP fork
 

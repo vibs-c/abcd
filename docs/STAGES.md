@@ -63,7 +63,8 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
 ## 6. Pre-analysis before playback · Sonnet · ⬜ (brief §5.1)
 
 - "Preparing your mix" screen with progress, skip already-analysed tracks, replace tracks that fail,
-  "Analyse my library" button.
+  "Analyse my library" button. Also downloads each track's audio file into a session folder, kept
+  until the track has played, then deleted (see DECISIONS.md); a storage check before starting.
 - **Check:** the first mix shows "Analysing 7 of 18"; a second mix with the same choices starts much
   faster.
 
@@ -103,13 +104,15 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
 
 - **Debug build feels laggy** (owner, stage 1). Expected for debug builds (no R8, Compose debug).
   Judge on a release build in stage 12; profile only if the release build is also slow.
-- **Setup/onboarding pages still say "Metrolist"** (owner, stage 1). 67 English strings name it.
-  Fix: replace the brand in `values/strings.xml` (translations keep "Metrolist" until a decision on
-  touching Weblate-managed locale files).
-- **Update checker points at Metrolist's GitHub** (`shared/.../update/LatestRelease.kt`, on by
-  default). abcd would offer Metrolist's APK as an "update". Fix: turn it off for abcd, or point it at
-  abcd's own releases (a network endpoint change, so ask first).
-- **About/Discord links and lyrics-API referrer headers name Metrolist's repo.** Decide what abcd shows.
+- ✅ **Setup/onboarding pages said "Metrolist"** — replaced in all locales (see DECISIONS.md).
+- ✅ **Update checker pointed at Metrolist's GitHub** — switched off (see DECISIONS.md). Re-enable
+  later by pointing it at abcd's own releases (network endpoint change; ask first).
+- **About screen and Discord button link to Metrolist's repo** — kept as upstream credit. Add abcd's
+  own repo link once it is public.
+- **GitHub CI** (`.github/workflows`) targets Metrolist's paid runners (`blacksmith-*`) and Sentry
+  release steps; it would not run usefully in abcd's repo. Decide before the first push.
+- **Repo git hooks are not active** (`core.hooksPath` unset). Enable with
+  `git config core.hooksPath .githooks` if wanted; all current commit messages already pass them.
 - **Sentry in release builds** sends opt-in crash reports to Metrolist's project. Handled in stage 12.
 
 ## 12. Make v1 stable and build a release · Opus · ⬜ (brief §1)

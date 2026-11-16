@@ -109,6 +109,12 @@ enum class UpdateFailure { CHECK, NO_APK, DOWNLOAD, DIGEST, INSTALL }
 object AppUpdateManager {
     const val CHANNEL_ID = "updates"
     private const val RELEASES_URL = "https://api.github.com/repos/MetrolistGroup/Metrolist/releases?per_page=50"
+
+    /**
+     * abcd: off, because [RELEASES_URL] lists Metrolist's releases and would offer Metrolist's APK as an
+     * update to abcd. Turn on only after pointing [RELEASES_URL] at abcd's own releases.
+     */
+    private const val UPDATES_ENABLED = false
     private const val NOTIFICATION_ID = 1400
     private const val MAX_APK_BYTES = 512L * 1024 * 1024
     private const val MIN_FREE_SPACE_BYTES = 16L * 1024 * 1024
@@ -171,6 +177,10 @@ object AppUpdateManager {
         crashRecovery: Boolean = false,
     ): GitHubRelease? =
         withContext(Dispatchers.IO) {
+            if (!UPDATES_ENABLED) {
+                mutableState.value = AppUpdateState.UpToDate(Settings.shared.lastUpdateCheckTimestamp)
+                return@withContext null
+            }
             operationMutex.withLock {
                 when (val active = mutableState.value) {
                     is AppUpdateState.Downloading -> {

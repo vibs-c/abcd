@@ -576,7 +576,7 @@ class Settings(
     var androidStorageAuditLocation by preference(AndroidStorageAuditLocationKey, "")
     var androidLastTrackedPlaylistSync by preference(AndroidLastTrackedPlaylistSyncKey, 0L)
 
-    var checkForUpdates by preference(true)
+    var checkForUpdates by preference(false)
     var updateNotifications by preference(true)
     var lastUpdateCheckTimestamp by preference(0L)
     var lastUpdateCheckAttemptTimestamp by preference(0L)
