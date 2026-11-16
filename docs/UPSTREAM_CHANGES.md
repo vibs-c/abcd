@@ -17,7 +17,7 @@ be merged later. New DJ code lives in the `dj-*` modules and is not listed here.
 | `shared/.../ui/navigation/Screen.kt`, `NavigationState.kt` | Add `Screen.Dj` and register its serializer | DJ tab route |
 | `androidApp/.../ui/Navigation.kt` | DJ tab label, icons; added after the hidden-tab check in both bottom-bar lists, and to the large-screen sidebar list | DJ tab (always shown); Metrolist's "mysterious fourth tab" behaviour unchanged |
 | `androidApp/.../ui/MetrolistApp.kt` | `Screen.Dj` in the top-level route sets, top-bar title, `isVisibleNavigationScreen`, and `entry<Screen.Dj> { DjTab() }` | DJ tab content |
-| `shared/.../composeResources/values/strings.xml` | 48 `dj_*` English strings appended | DJ screens (translations via Weblate later) |
+| `shared/.../composeResources/values/strings.xml` | 107 `dj_*` English strings appended (setup screen and Lab) | DJ screens (translations via Weblate later) |
 | `.gitmodules` | Two new submodules: `dj-native/third_party/essentia`, `dj-native/third_party/eigen` | Audio analysis libraries (stage 4) |
 | `README.md` | abcd section added at the top; Metrolist's README kept below | Credits (brief §2.2) |
 | `CLAUDE.md` | Replaced with the abcd agent guide | Brief §3.4 |

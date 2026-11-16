@@ -66,7 +66,7 @@ Fixes and known gaps are in `docs/DECISIONS.md` ("Review of stages 3 and 4"). Ca
 charts, mood/genre pages and library/liked songs as candidate sources (§7.1) once tracks have
 language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
 
-## 5. Database and Lab screen · Sonnet · ⬜ (brief §6.1, §6.2, §4.5)
+## 5. Database and Lab screen · Sonnet · ✅ built, awaiting phone test (brief §6.1, §6.2, §4.5)
 
 - Separate Room database `abcd_dj.db` with every v1 entity in §6.1, including `ChorusSegment`. Save
   analysis results. Developer Lab screen (§4.5) behind a settings toggle.

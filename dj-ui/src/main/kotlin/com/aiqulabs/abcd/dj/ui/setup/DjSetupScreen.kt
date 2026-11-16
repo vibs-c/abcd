@@ -22,10 +22,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +54,9 @@ import com.metrolist.shared.generated.resources.dj_failed_not_enough
 import com.metrolist.shared.generated.resources.dj_failed_title
 import com.metrolist.shared.generated.resources.dj_hint_choose_language
 import com.metrolist.shared.generated.resources.dj_hint_choose_mood
+import com.metrolist.shared.generated.resources.dj_lab_open
+import com.metrolist.shared.generated.resources.dj_lab_toggle_desc
+import com.metrolist.shared.generated.resources.dj_lab_toggle_title
 import com.metrolist.shared.generated.resources.dj_length_hours
 import com.metrolist.shared.generated.resources.dj_length_hours_minutes
 import com.metrolist.shared.generated.resources.dj_length_minutes
@@ -82,6 +87,9 @@ private const val LENGTH_STEP_MINUTES = 15
  * @param onStart called when the user taps Start DJ with a complete form.
  * @param onCancel called when the user cancels while the mix is being built.
  * @param onDismissResult called when the user dismisses a finished or failed status card.
+ * @param labEnabled whether the developer Lab is switched on (brief §4.5).
+ * @param onLabEnabledChange called when the Lab switch is toggled.
+ * @param onOpenLab called when the user opens the Lab.
  * @param contentPadding space to keep clear for the app's top bar, mini player and navigation bar.
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -93,6 +101,9 @@ fun DjSetupScreen(
     onStart: () -> Unit,
     onCancel: () -> Unit,
     onDismissResult: () -> Unit,
+    labEnabled: Boolean,
+    onLabEnabledChange: (Boolean) -> Unit,
+    onOpenLab: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
 ) {
@@ -204,7 +215,33 @@ fun DjSetupScreen(
                 null -> Unit
             }
         }
+        LabSwitch(labEnabled, onLabEnabledChange, onOpenLab)
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** Developer-only switch (brief §4.5). Off by default; when on, an "Open Lab" button appears. */
+@Composable
+private fun LabSwitch(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onOpen: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(Res.string.dj_lab_toggle_title), style = MaterialTheme.typography.titleSmall)
+                Text(
+                    stringResource(Res.string.dj_lab_toggle_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+        }
+        if (enabled) {
+            OutlinedButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text(stringResource(Res.string.dj_lab_open)) }
+        }
     }
 }
 

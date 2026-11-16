@@ -1,0 +1,579 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "08ac16546328667660b2cc4e4da59e2c",
+    "entities": [
+      {
+        "tableName": "track_analysis",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`videoId` TEXT NOT NULL, `analysisVersion` INTEGER NOT NULL, `durationMs` REAL NOT NULL, `bpm` REAL NOT NULL, `bpmConfidence` REAL NOT NULL, `bpmConfidenceRaw` REAL NOT NULL, `beatsPerBar` INTEGER NOT NULL, `downbeatConfidence` REAL NOT NULL, `beatGrid` BLOB NOT NULL, `downbeats` BLOB NOT NULL, `phraseStartsMs` BLOB NOT NULL, `keyRoot` TEXT NOT NULL, `keyMode` TEXT NOT NULL, `camelot` TEXT NOT NULL, `keyPitchClass` INTEGER NOT NULL, `keyConfidence` REAL NOT NULL, `lufs` REAL NOT NULL, `energyCurve` BLOB NOT NULL, `waveformPeaks` BLOB NOT NULL, `introMixableEndMs` REAL NOT NULL, `outroMixableStartMs` REAL NOT NULL, `analyzedAt` INTEGER NOT NULL, PRIMARY KEY(`videoId`))",
+        "fields": [
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisVersion",
+            "columnName": "analysisVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bpm",
+            "columnName": "bpm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bpmConfidence",
+            "columnName": "bpmConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bpmConfidenceRaw",
+            "columnName": "bpmConfidenceRaw",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beatsPerBar",
+            "columnName": "beatsPerBar",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downbeatConfidence",
+            "columnName": "downbeatConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beatGrid",
+            "columnName": "beatGrid",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downbeats",
+            "columnName": "downbeats",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phraseStartsMs",
+            "columnName": "phraseStartsMs",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyRoot",
+            "columnName": "keyRoot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyMode",
+            "columnName": "keyMode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "camelot",
+            "columnName": "camelot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyPitchClass",
+            "columnName": "keyPitchClass",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyConfidence",
+            "columnName": "keyConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lufs",
+            "columnName": "lufs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "energyCurve",
+            "columnName": "energyCurve",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waveformPeaks",
+            "columnName": "waveformPeaks",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "introMixableEndMs",
+            "columnName": "introMixableEndMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outroMixableStartMs",
+            "columnName": "outroMixableStartMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analyzedAt",
+            "columnName": "analyzedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "videoId"
+          ]
+        }
+      },
+      {
+        "tableName": "track_section",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `videoId` TEXT NOT NULL, `type` TEXT NOT NULL, `startMs` REAL NOT NULL, `endMs` REAL NOT NULL, `confidence` REAL NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_track_section_videoId",
+            "unique": false,
+            "columnNames": [
+              "videoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_track_section_videoId` ON `${TABLE_NAME}` (`videoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "chorus_segment",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `videoId` TEXT NOT NULL, `startMs` REAL NOT NULL, `endMs` REAL NOT NULL, `startBar` INTEGER NOT NULL, `endBar` INTEGER NOT NULL, `isMainChorus` INTEGER NOT NULL, `score` REAL NOT NULL, `signals` TEXT NOT NULL, `source` TEXT NOT NULL, `editedAt` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startMs",
+            "columnName": "startMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endMs",
+            "columnName": "endMs",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startBar",
+            "columnName": "startBar",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endBar",
+            "columnName": "endBar",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isMainChorus",
+            "columnName": "isMainChorus",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "signals",
+            "columnName": "signals",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editedAt",
+            "columnName": "editedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chorus_segment_videoId",
+            "unique": false,
+            "columnNames": [
+              "videoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chorus_segment_videoId` ON `${TABLE_NAME}` (`videoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "track_meta",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`videoId` TEXT NOT NULL, `title` TEXT NOT NULL, `artists` TEXT NOT NULL, `album` TEXT, `durationMs` INTEGER, `thumbnailUrl` TEXT, PRIMARY KEY(`videoId`))",
+        "fields": [
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "artists",
+            "columnName": "artists",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "album",
+            "columnName": "album",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "thumbnailUrl",
+            "columnName": "thumbnailUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "videoId"
+          ]
+        }
+      },
+      {
+        "tableName": "track_tag",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`videoId` TEXT NOT NULL, `tagType` TEXT NOT NULL, `value` TEXT NOT NULL, `source` TEXT NOT NULL, `confidence` REAL NOT NULL, PRIMARY KEY(`videoId`, `tagType`, `value`, `source`))",
+        "fields": [
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagType",
+            "columnName": "tagType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "videoId",
+            "tagType",
+            "value",
+            "source"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_track_tag_videoId",
+            "unique": false,
+            "columnNames": [
+              "videoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_track_tag_videoId` ON `${TABLE_NAME}` (`videoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "transition_feedback",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fromVideoId` TEXT NOT NULL, `toVideoId` TEXT NOT NULL, `technique` TEXT NOT NULL, `bpmDelta` REAL NOT NULL, `keyCompat` TEXT NOT NULL, `outcome` TEXT NOT NULL, `timestamp` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fromVideoId",
+            "columnName": "fromVideoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toVideoId",
+            "columnName": "toVideoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "technique",
+            "columnName": "technique",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bpmDelta",
+            "columnName": "bpmDelta",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keyCompat",
+            "columnName": "keyCompat",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transition_feedback_fromVideoId",
+            "unique": false,
+            "columnNames": [
+              "fromVideoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transition_feedback_fromVideoId` ON `${TABLE_NAME}` (`fromVideoId`)"
+          },
+          {
+            "name": "index_transition_feedback_toVideoId",
+            "unique": false,
+            "columnNames": [
+              "toVideoId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transition_feedback_toVideoId` ON `${TABLE_NAME}` (`toVideoId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "track_feedback",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`videoId` TEXT NOT NULL, `playCount` INTEGER NOT NULL, `skipCount` INTEGER NOT NULL, `djPlayCount` INTEGER NOT NULL, `removeCount` INTEGER NOT NULL, `banned` INTEGER NOT NULL, `lastPlayedAt` INTEGER, PRIMARY KEY(`videoId`))",
+        "fields": [
+          {
+            "fieldPath": "videoId",
+            "columnName": "videoId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "playCount",
+            "columnName": "playCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "skipCount",
+            "columnName": "skipCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "djPlayCount",
+            "columnName": "djPlayCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "removeCount",
+            "columnName": "removeCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "banned",
+            "columnName": "banned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPlayedAt",
+            "columnName": "lastPlayedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "videoId"
+          ]
+        }
+      },
+      {
+        "tableName": "dj_session",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `settingsJson` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER, `tracksPlayedJson` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settingsJson",
+            "columnName": "settingsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tracksPlayedJson",
+            "columnName": "tracksPlayedJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '08ac16546328667660b2cc4e4da59e2c')"
+    ]
+  }
+}

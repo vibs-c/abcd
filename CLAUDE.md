@@ -77,9 +77,9 @@ DJ modules (brief §10; package `com.aiqulabs.abcd.dj.<module>`):
 | `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, later scoring/technique selection | Has code + tests |
 | `dj-native` | Android lib | C++ via CMake/NDK: Essentia-based analysis, JNI; `core/` is portable C++ (no JNI/Android). See `dj-native/README.md` | Analysis done (effect DSP comes in stage 8) |
 | `dj-analysis` | Android lib | `MediaCodecPcmDecoder`, `NativeAudioAnalyzer`; pre-analysis service later | Decode + analyse done (pre-analysis in stage 6) |
-| `dj-data` | Android lib | Separate Room DB `abcd_dj.db`, DAOs, repositories | `DjSetupStore` only (Room in stage 5) |
+| `dj-data` | KMP, Android target only | Separate Room DB `abcd_dj.db` (all v1 entities), DAO, `DjAnalysisRepository`, `DjData`, `DjSetupStore`; exported schema in `schemas/` | Done (stage 5) |
 | `dj-engine` | Android lib | `DjMixEngine`, two decks, AudioProcessors, sync loop | Empty (stage 8) |
-| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup screen (stage 3) |
+| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup (3) and Lab (5) |
 
 **Host glue rule:** a library cannot depend on `androidApp`. Code that touches Metrolist internals
 (`PlayerConnection`, `AudioCacheManager`, `MusicService`, stream resolver) goes in new files under

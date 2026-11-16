@@ -275,6 +275,44 @@ Known gaps against the brief, not fixed now (planned):
   native rate (documented above).
 - §5.5 lyrics signal: `ChorusRanker` exists and is tested but nothing fetches lyrics yet (stage 6).
 
+## 2026-11-17 · Stage 5: DJ database and Lab screen
+
+- **Separate database `abcd_dj.db`** (Room 3, version 1) in `dj-data`; Metrolist's `song.db` and
+  `MusicDatabase` are untouched. It holds every v1 entity from brief §6.1 from the start, so no early
+  migration is needed: `track_analysis`, `track_section`, `chorus_segment`, `track_tag`,
+  `transition_feedback`, `track_feedback`, `dj_session`, plus one addition, `track_meta` (title and
+  artists, so the Lab can name songs that are not in Metrolist's library; never meant for sharing).
+  Extra columns beyond the brief: `bpmConfidenceRaw`, `beatsPerBar`, `downbeatConfidence`,
+  `keyPitchClass` (needed to rebuild the full analysis) and `removeCount` on `track_feedback` (§6.3).
+- **`dj-data` is Kotlin Multiplatform with an Android target only**, set up like `:shared`, because
+  Room 3 generates its database constructor for KMP. Everything except `DjData` (Android builder) and
+  `DjSetupStore` is in `commonMain`, so iOS/desktop later need only a driver and a builder.
+- **No foreign keys** between tables: `chorus_segment` rows must survive when an analysis row is
+  deleted and recreated. Arrays are BLOBs written by portable code (doubles as 8 little-endian bytes,
+  peaks as bytes); enums are stored as text so a new value never breaks an old row.
+- **The rule that matters, tested on the emulator:** re-analysis replaces only `AUTO` chorus segments,
+  and only when the track has no `USER` segments (`DjDao.replaceAnalysis`, one transaction). If the user
+  has a main chorus, it is the only main one when loading. Deleting an analysis keeps the user's edits.
+- **Exported schema** is committed in `dj-data/schemas/` for later migration tests. Never use
+  destructive migration here: the user's chorus edits live in this database.
+- **Lab** is switched on with a "Lab (developer tools)" switch at the bottom of the DJ tab (stored in
+  the app's own preferences; off by default, no change to Metrolist's settings screens). It shows the
+  analysed songs, songs on the phone, database row counts, and a detail page with a waveform strip
+  (sections coloured, chorus candidates outlined, main one thicker), tempo, key, loudness, beat grid,
+  mix points, sections and chorus candidates with scores and sources. Buttons: analyse again, delete.
+- **Where Lab gets audio (stage 5 scope):** files Metrolist already holds (downloaded or cached songs),
+  or **any music file the owner picks with the system file picker** (added because it works with the
+  owner's own files and needs no download). Picked files get ids `local-<hash>` and live only in the
+  Lab. Fetching audio for songs that are not on the phone is stage 6; Metrolist's download helpers are
+  `private` in `AudioCacheManager`, so stage 6 needs a small, approved addition there.
+- **Not in the Lab yet (later stages):** "open the chorus editor" (stage 11), "audition a transition"
+  (stage 9) and "pre-analysis status" (stage 6). The brief lists them under §4.5; they have nothing to
+  show until those stages exist.
+- **Emulator finding:** YouTube downloads did not complete on the emulator, so "songs on this phone"
+  stayed empty there; the file picker route was used instead. On the emulator decoding a 3:42 MP3 took
+  about 25 s (software codec on an emulated CPU) plus 7.5 s to analyse; expect far faster decoding on a
+  phone. Worth checking on the real phone because stage 6 analyses 20+ songs in a row.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

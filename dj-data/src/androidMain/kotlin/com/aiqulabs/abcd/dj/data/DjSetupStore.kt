@@ -21,8 +21,16 @@ class DjSetupStore(
         preferences.edit().putString(KEY_DRAFT, draft.toJson()).apply()
     }
 
+    /** Whether the developer Lab is switched on (brief §4.5). Off until the owner turns it on. */
+    var labEnabled: Boolean
+        get() = preferences.getBoolean(KEY_LAB, false)
+        set(value) {
+            preferences.edit().putBoolean(KEY_LAB, value).apply()
+        }
+
     private companion object {
         const val FILE_NAME = "abcd_dj_setup"
         const val KEY_DRAFT = "draft"
+        const val KEY_LAB = "lab_enabled"
     }
 }

@@ -40,6 +40,10 @@ data class SectionResult(
     val confidence: Double,
 )
 
+/** Who produced a chorus segment. User edits always win and are never overwritten by re-analysis (brief §6.1). */
+@Serializable
+enum class ChorusSource { AUTO, USER }
+
 /** One place in the song that may be the chorus. Bars are 0-based; [endBar] is exclusive. */
 @Serializable
 data class ChorusCandidate(
@@ -51,6 +55,10 @@ data class ChorusCandidate(
     val score: Double,
     val signals: List<ChorusSignal> = emptyList(),
     val isMain: Boolean = false,
+    /** The native analyzer only produces [ChorusSource.AUTO]; the chorus editor (stage 11) writes [ChorusSource.USER]. */
+    val source: ChorusSource = ChorusSource.AUTO,
+    /** When a user last edited this segment, in epoch milliseconds. Null for automatic segments. */
+    val editedAt: Long? = null,
 ) {
     val durationMs: Double get() = endMs - startMs
 }
