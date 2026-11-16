@@ -30,6 +30,10 @@ sealed class Screen : NavKey {
     @Serializable
     data object EasterEgg : Screen()
 
+    /** abcd DJ Mode tab (setup screen, then the live session). */
+    @Serializable
+    data object Dj : Screen()
+
     @Serializable
     data object Settings : Screen()
 

@@ -5476,4 +5476,60 @@
     <string name="ai_setup_privacy_settings">Open privacy settings</string>
     <string name="ai_setup_sign_in_again">Sign in again</string>
     <string name="ai_setup_key_limits">Review key limits</string>
+
+    <!-- abcd DJ Mode -->
+    <string name="dj_tab">DJ</string>
+    <string name="dj_setup_title">Start a mix</string>
+    <string name="dj_setup_subtitle">Pick a few things and abcd will DJ for you.</string>
+    <string name="dj_section_languages">Languages</string>
+    <string name="dj_section_mood">Mood</string>
+    <string name="dj_section_mix_style">Mix style</string>
+    <string name="dj_section_length">Session length</string>
+    <string name="dj_language_any">Any</string>
+    <string name="dj_language_hindi">Hindi</string>
+    <string name="dj_language_english">English</string>
+    <string name="dj_language_punjabi">Punjabi</string>
+    <string name="dj_language_marathi">Marathi</string>
+    <string name="dj_language_tamil">Tamil</string>
+    <string name="dj_language_telugu">Telugu</string>
+    <string name="dj_language_kannada">Kannada</string>
+    <string name="dj_language_malayalam">Malayalam</string>
+    <string name="dj_language_bengali">Bengali</string>
+    <string name="dj_language_gujarati">Gujarati</string>
+    <string name="dj_mood_party">Party</string>
+    <string name="dj_mood_chill">Chill</string>
+    <string name="dj_mood_romantic">Romantic</string>
+    <string name="dj_mood_road_trip">Road Trip</string>
+    <string name="dj_mood_workout">Workout</string>
+    <string name="dj_mood_sad">Sad / Emotional</string>
+    <string name="dj_mood_retro">Retro / Nostalgic</string>
+    <string name="dj_mood_devotional">Devotional</string>
+    <string name="dj_mood_wedding">Wedding / Sangeet</string>
+    <string name="dj_style_smooth">Smooth</string>
+    <string name="dj_style_radio">Radio</string>
+    <string name="dj_style_chorus_hits">Chorus Hits</string>
+    <string name="dj_style_smooth_desc">Long, gentle blends between songs.</string>
+    <string name="dj_style_radio_desc">Quick fades with nearly full songs.</string>
+    <string name="dj_style_chorus_hits_desc">Mostly choruses at a fast pace.</string>
+    <string name="dj_length_minutes">%1$d min</string>
+    <string name="dj_length_hours">%1$d h</string>
+    <string name="dj_length_hours_minutes">%1$d h %2$d min</string>
+    <string name="dj_start">Start DJ</string>
+    <string name="dj_hint_choose_language">Choose at least one language</string>
+    <string name="dj_hint_choose_mood">Choose a mood</string>
+    <string name="dj_building_title">Building your mix</string>
+    <string name="dj_building_message">Finding songs that match your choices.</string>
+    <string name="dj_cancel">Cancel</string>
+    <string name="dj_started_title">Your mix is playing</string>
+    <plurals name="dj_started_message">
+        <item quantity="one">%1$d song queued. Change the choices below to start another mix.</item>
+        <item quantity="other">%1$d songs queued. Change the choices below to start another mix.</item>
+    </plurals>
+    <string name="dj_failed_title">Could not build the mix</string>
+    <plurals name="dj_failed_not_enough">
+        <item quantity="one">Only %1$d song was found. Try another language or mood.</item>
+        <item quantity="other">Only %1$d songs were found. Try another language or mood.</item>
+    </plurals>
+    <string name="dj_failed_error">Something went wrong while finding songs. Check your connection and try again.</string>
+    <string name="dj_queue_title">DJ mix</string>
 </resources>

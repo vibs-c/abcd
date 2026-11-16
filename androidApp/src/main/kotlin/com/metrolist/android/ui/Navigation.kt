@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.metrolist.shared.generated.resources.Res
+import com.metrolist.shared.generated.resources.dj_tab
 import com.metrolist.shared.generated.resources.filter_library
 import com.metrolist.shared.generated.resources.home
 import com.metrolist.shared.generated.resources.listen_together
@@ -72,6 +73,7 @@ val Screen.labelRes: StringResource?
             Screen.Library -> Res.string.filter_library
             Screen.Search -> Res.string.search
             Screen.EasterEgg -> Res.string.mysterious_fourth_tab
+            Screen.Dj -> Res.string.dj_tab
             Screen.Settings -> Res.string.settings
             Screen.History -> Res.string.menu_history
             Screen.Statistics -> Res.string.statistics
@@ -85,6 +87,7 @@ val Screen.icon: ImageVector?
             Screen.Home -> MetrolistIcons.Outlined.Home
             Screen.Library -> MetrolistIcons.Outlined.LibraryMusic
             Screen.Search -> MetrolistIcons.Outlined.Search
+            Screen.Dj -> MetrolistIcons.Outlined.Headphones
             Screen.Settings -> MetrolistIcons.Outlined.Settings
             Screen.History -> MetrolistIcons.Outlined.History
             Screen.Statistics -> MetrolistIcons.Outlined.SsidChart
@@ -99,6 +102,7 @@ val Screen.iconFilled: ImageVector?
             Screen.Library -> MetrolistIcons.Filled.LibraryMusic
             Screen.Search -> MetrolistIcons.Filled.Search
             Screen.EasterEgg -> MetrolistIcons.Filled.QuestionMark
+            Screen.Dj -> MetrolistIcons.Filled.Headphones
             Screen.Settings -> MetrolistIcons.Filled.Settings
             Screen.History -> MetrolistIcons.Filled.History
             Screen.Statistics -> MetrolistIcons.Filled.SsidChart
@@ -129,7 +133,7 @@ fun MetrolistNavigationScaffold(
     val useFloatingNavigation = floatingNavigation && !useDesktopUi && !isTv
     val screens =
         if (useDesktopUi) {
-            (visibleSidebarScreens(Settings.shared.sidebarNavItems) + Screen.Search + Screen.Settings).distinct()
+            (visibleSidebarScreens(Settings.shared.sidebarNavItems) + Screen.Search + Screen.Dj + Screen.Settings).distinct()
         } else if (useFloatingNavigation) {
             floatingNavigationItems()
         } else {
@@ -256,6 +260,7 @@ private fun floatingNavigationItems(): List<Screen> =
         if (Settings.shared.showBottomNavLibrary) add(Screen.Library)
         if (Settings.shared.showBottomNavSearch) add(Screen.Search)
         if (isEmpty()) add(Screen.EasterEgg)
+        add(Screen.Dj)
     }
 
 private fun visibleNavigationItems(): List<Screen> =
@@ -264,6 +269,7 @@ private fun visibleNavigationItems(): List<Screen> =
         if (Settings.shared.showBottomNavSearch) add(Screen.Search)
         if (Settings.shared.showBottomNavLibrary) add(Screen.Library)
         if (isEmpty()) add(Screen.EasterEgg)
+        add(Screen.Dj)
     }
 
 private fun Modifier.navigationLongPress(

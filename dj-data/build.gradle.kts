@@ -21,5 +21,5 @@ android {
 }
 
 dependencies {
-    implementation(project(":dj-core"))
+    api(project(":dj-core"))
 }
