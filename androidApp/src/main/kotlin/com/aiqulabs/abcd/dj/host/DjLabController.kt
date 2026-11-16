@@ -63,7 +63,39 @@ object DjLabController {
                 refreshCounts(repository)
             }
         }
+        scope.launch {
+            DjLibraryAnalyzer.state.collect { library ->
+                mutableState.update { it.copy(library = library) }
+                if (!library.isBusy) refreshLocalSongs()
+            }
+        }
+        refreshAudioFiles()
     }
+
+    /** Reads how much space the songs abcd downloaded for analysis use. */
+    fun refreshAudioFiles() {
+        val context = attachedTo ?: return
+        scope.launch {
+            val bytes = withContext(Dispatchers.IO) { DjAudioProvider.get(context).usedBytes() }
+            mutableState.update { it.copy(audioFilesBytes = bytes) }
+        }
+    }
+
+    /** Deletes the songs abcd downloaded for analysis. Metrolist's own downloads and cache are not touched. */
+    fun clearAudioFiles() {
+        val context = attachedTo ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) { DjAudioProvider.get(context).clear() }
+            refreshAudioFiles()
+        }
+    }
+
+    /** Starts "Analyse my library" in the background service. */
+    fun analyseLibrary() {
+        DjLibraryAnalyzer.request(attachedTo ?: return)
+    }
+
+    fun stopLibrary() = DjLibraryAnalyzer.stop()
 
     /** Reloads the list of songs on the phone (they change as the user listens and downloads). */
     fun refreshLocalSongs() {
@@ -156,7 +188,7 @@ object DjLabController {
         track: DjTrack,
     ) {
         val repository = repository(context)
-        if (!location.contains("://")) {
+        if (!location.contains("://") && !location.startsWith("file:")) {
             mutableState.update { it.copy(message = LabMessage.UnsupportedFile) }
             return
         }

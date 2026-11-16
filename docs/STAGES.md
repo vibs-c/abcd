@@ -72,11 +72,17 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
   analysis results. Developer Lab screen (§4.5) behind a settings toggle.
 - **Check:** turn on the Lab toggle, open a song in Lab, see its BPM, key, sections and chorus.
 
-## 6. Pre-analysis before playback · Sonnet · ⬜ (brief §5.1)
+## 6. Pre-analysis before playback · Sonnet · ✅ built, awaiting phone test (brief §5.1)
 
 - "Preparing your mix" screen with progress, skip already-analysed tracks, replace tracks that fail,
   "Analyse my library" button. Also downloads each track's audio file into a session folder, kept
   until the track has played, then deleted (see DECISIONS.md); a storage check before starting.
+- **Done:** `SessionPreparer` + `PlaylistOrderer` + `ScoringConfig` in `dj-core` (unit-tested);
+  `DjAudioProvider` / `DjTrackPreparer` / `DjLibraryAnalyzer` / `DjAnalysisService` in the host glue;
+  Preparing card; "Analyse my library" card (DJ tab and Lab) with a foreground-service notification; Lab
+  shows and clears the DJ audio files; new public `AudioCacheManager.downloadToFile` (owner-approved,
+  logged in UPSTREAM_CHANGES.md). Tracks are ordered by tempo, key and energy arc after analysis.
+  Details in `docs/DECISIONS.md` ("Stage 6").
 - **Check:** the first mix shows "Analysing 7 of 18"; a second mix with the same choices starts much
   faster.
 

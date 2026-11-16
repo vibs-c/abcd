@@ -12,6 +12,13 @@ internal fun formatClock(ms: Double): String {
 /** "85%" for 0.85. Numbers only, so no language text lives here. */
 internal fun formatPercent(fraction: Double): String = "${(fraction * 100).roundToInt().coerceIn(0, 100)}%"
 
+/** "12.3 MB", "850 KB" or "0 KB": file sizes as numbers and units only. */
+internal fun formatBytes(bytes: Long): String =
+    when {
+        bytes >= 1024L * 1024 -> String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024))
+        else -> String.format(Locale.ROOT, "%d KB", bytes / 1024)
+    }
+
 /** "138.02" with a dot as decimal separator whatever the phone's language is. */
 internal fun formatDecimal(
     value: Double,

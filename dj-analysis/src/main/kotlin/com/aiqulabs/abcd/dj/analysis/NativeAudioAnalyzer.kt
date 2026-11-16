@@ -6,6 +6,8 @@ import com.aiqulabs.abcd.dj.core.analysis.PcmAudio
 import com.aiqulabs.abcd.dj.nativelib.NativeAnalyzer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -19,7 +21,18 @@ class NativeAudioAnalyzer(
     override val analysisVersion: Int get() = NativeAnalyzer.analysisVersion()
 
     override suspend fun analyze(pcm: PcmAudio): AnalysisResult =
-        withContext(dispatcher) {
-            AnalysisResult.fromWireJson(NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleRate))
+        nativeLock.withLock {
+            withContext(dispatcher) {
+                AnalysisResult.fromWireJson(NativeAnalyzer.analyzeJson(pcm.samples, pcm.sampleRate))
+            }
         }
+
+    private companion object {
+        /**
+         * One native analysis at a time, across all instances. Pre-analysis downloads and decodes the next
+         * track while this one is being analysed, but Essentia's one-time setup is not guaranteed to be
+         * thread-safe, and two analyses at once would also double the memory use.
+         */
+        val nativeLock = Mutex()
+    }
 }

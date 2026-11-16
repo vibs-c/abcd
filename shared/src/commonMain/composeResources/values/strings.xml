@@ -5531,7 +5531,52 @@
         <item quantity="other">Only %1$d songs were found. Try another language or mood.</item>
     </plurals>
     <string name="dj_failed_error">Something went wrong while finding songs. Check your connection and try again.</string>
+    <string name="dj_failed_storage">There is not enough free space to prepare this mix. Free up some storage and try again.</string>
     <string name="dj_queue_title">DJ mix</string>
+
+    <!-- abcd DJ Mode: preparing the mix before playback -->
+    <string name="dj_preparing_title">Preparing your mix</string>
+    <string name="dj_preparing_progress">Analysing %1$d of %2$d</string>
+    <plurals name="dj_preparing_known">
+        <item quantity="one">%1$d song was already analysed.</item>
+        <item quantity="other">%1$d songs were already analysed.</item>
+    </plurals>
+    <plurals name="dj_preparing_skipped">
+        <item quantity="one">%1$d song could not be used and was replaced.</item>
+        <item quantity="other">%1$d songs could not be used and were replaced.</item>
+    </plurals>
+    <string name="dj_preparing_hint">The first mix takes a few minutes. Songs stay analysed, so the next mix starts much faster.</string>
+
+    <!-- abcd DJ Mode: analyse my library -->
+    <string name="dj_library_title">Analyse my library</string>
+    <string name="dj_library_desc">Analyses your liked, library and downloaded songs in the background so mixes start faster.</string>
+    <string name="dj_library_start">Analyse my library</string>
+    <string name="dj_library_cancel">Stop</string>
+    <string name="dj_library_collecting">Looking for songs to analyse</string>
+    <string name="dj_library_running">Analysing %1$d of %2$d</string>
+    <string name="dj_library_nothing">Everything in your library is already analysed.</string>
+    <plurals name="dj_library_done">
+        <item quantity="one">Analysed %1$d song.</item>
+        <item quantity="other">Analysed %1$d songs.</item>
+    </plurals>
+    <plurals name="dj_library_failed">
+        <item quantity="one">%1$d song could not be analysed.</item>
+        <item quantity="other">%1$d songs could not be analysed.</item>
+    </plurals>
+    <plurals name="dj_library_remaining">
+        <item quantity="one">%1$d song is left. Tap again to continue.</item>
+        <item quantity="other">%1$d songs are left. Tap again to continue.</item>
+    </plurals>
+    <string name="dj_library_stopped">Stopped. Songs analysed so far are kept.</string>
+    <string name="dj_library_notification_title">Analysing your library</string>
+    <string name="dj_library_notification_text">%1$d of %2$d songs</string>
+    <string name="dj_library_notification_channel">Library analysis</string>
+    <string name="dj_library_notification_stop">Stop</string>
+
+    <!-- abcd DJ Mode: audio files kept for DJ sessions (Lab) -->
+    <string name="dj_audio_files_title">DJ audio files</string>
+    <string name="dj_audio_files_size">%1$s used by songs downloaded for analysis.</string>
+    <string name="dj_audio_files_clear">Delete files</string>
 
     <!-- abcd DJ Mode: Lab (developer tools) -->
     <string name="dj_lab_toggle_title">Lab (developer tools)</string>

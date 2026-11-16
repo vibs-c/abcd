@@ -26,7 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aiqulabs.abcd.dj.core.analysis.TrackSummary
+import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisCard
 import com.metrolist.shared.generated.resources.Res
+import com.metrolist.shared.generated.resources.dj_audio_files_clear
+import com.metrolist.shared.generated.resources.dj_audio_files_size
+import com.metrolist.shared.generated.resources.dj_audio_files_title
 import com.metrolist.shared.generated.resources.dj_lab_analyse
 import com.metrolist.shared.generated.resources.dj_lab_analysed_badge
 import com.metrolist.shared.generated.resources.dj_lab_back
@@ -94,6 +98,7 @@ fun LabScreen(
                 Text(stringResource(Res.string.dj_lab_pick_file))
             }
         }
+        item { LibraryAnalysisCard(state.library, onStart = actions.onAnalyseLibrary, onStop = actions.onStopLibrary) }
 
         item { SectionTitle(stringResource(Res.string.dj_lab_section_analysed)) }
         if (state.analysed.isEmpty()) {
@@ -126,6 +131,20 @@ fun LabScreen(
                     stringResource(Res.string.dj_lab_db_counts_feedback, c.tags, c.transitionFeedback, c.trackFeedback, c.sessions),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+        }
+
+        item { SectionTitle(stringResource(Res.string.dj_audio_files_title)) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(Res.string.dj_audio_files_size, formatBytes(state.audioFilesBytes)),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = actions.onClearAudioFiles, enabled = state.audioFilesBytes > 0) {
+                    Text(stringResource(Res.string.dj_audio_files_clear))
+                }
             }
         }
     }

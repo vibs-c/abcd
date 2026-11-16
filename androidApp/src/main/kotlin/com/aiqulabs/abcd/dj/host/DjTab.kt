@@ -38,6 +38,7 @@ fun DjTab(modifier: Modifier = Modifier) {
     var labEnabled by remember { mutableStateOf(store.labEnabled) }
     var labOpen by remember { mutableStateOf(false) }
     val startState by DjController.state.collectAsState()
+    val libraryState by DjLibraryAnalyzer.state.collectAsState()
     // Same insets as the Home and Library tabs: below the top bar, above the mini player.
     val insets = PaddingValues(top = tabContentTopPadding(), bottom = LocalMiniPlayerBottomInset.current)
 
@@ -65,6 +66,9 @@ fun DjTab(modifier: Modifier = Modifier) {
                     onDelete = DjLabController::delete,
                     onDismissMessage = DjLabController::dismissMessage,
                     onPickFile = { picker.launch(arrayOf("audio/*")) },
+                    onAnalyseLibrary = DjLabController::analyseLibrary,
+                    onStopLibrary = DjLabController::stopLibrary,
+                    onClearAudioFiles = DjLabController::clearAudioFiles,
                     onBack = { labOpen = false },
                 ),
             modifier = modifier.fillMaxSize(),
@@ -82,10 +86,13 @@ fun DjTab(modifier: Modifier = Modifier) {
         },
         onStart = {
             val settings = draft.toSettings()
-            if (settings != null && playerConnection != null) DjController.start(settings, playerConnection)
+            if (settings != null && playerConnection != null) DjController.start(appContext, settings, playerConnection)
         },
         onCancel = DjController::cancel,
         onDismissResult = DjController::dismissResult,
+        libraryState = libraryState,
+        onAnalyseLibrary = { DjLibraryAnalyzer.request(appContext) },
+        onStopLibrary = DjLibraryAnalyzer::stop,
         labEnabled = labEnabled,
         onLabEnabledChange = {
             labEnabled = it

@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
@@ -45,12 +46,16 @@ import com.aiqulabs.abcd.dj.core.model.DjMood
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjSetupDraft
 import com.aiqulabs.abcd.dj.core.model.MixStyle
+import com.aiqulabs.abcd.dj.core.prep.PreparationProgress
+import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisCard
+import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisState
 import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.dj_building_message
 import com.metrolist.shared.generated.resources.dj_building_title
 import com.metrolist.shared.generated.resources.dj_cancel
 import com.metrolist.shared.generated.resources.dj_failed_error
 import com.metrolist.shared.generated.resources.dj_failed_not_enough
+import com.metrolist.shared.generated.resources.dj_failed_storage
 import com.metrolist.shared.generated.resources.dj_failed_title
 import com.metrolist.shared.generated.resources.dj_hint_choose_language
 import com.metrolist.shared.generated.resources.dj_hint_choose_mood
@@ -60,6 +65,11 @@ import com.metrolist.shared.generated.resources.dj_lab_toggle_title
 import com.metrolist.shared.generated.resources.dj_length_hours
 import com.metrolist.shared.generated.resources.dj_length_hours_minutes
 import com.metrolist.shared.generated.resources.dj_length_minutes
+import com.metrolist.shared.generated.resources.dj_preparing_hint
+import com.metrolist.shared.generated.resources.dj_preparing_known
+import com.metrolist.shared.generated.resources.dj_preparing_progress
+import com.metrolist.shared.generated.resources.dj_preparing_skipped
+import com.metrolist.shared.generated.resources.dj_preparing_title
 import com.metrolist.shared.generated.resources.dj_section_languages
 import com.metrolist.shared.generated.resources.dj_section_length
 import com.metrolist.shared.generated.resources.dj_section_mix_style
@@ -87,6 +97,9 @@ private const val LENGTH_STEP_MINUTES = 15
  * @param onStart called when the user taps Start DJ with a complete form.
  * @param onCancel called when the user cancels while the mix is being built.
  * @param onDismissResult called when the user dismisses a finished or failed status card.
+ * @param libraryState progress of the "Analyse my library" batch.
+ * @param onAnalyseLibrary called when the user starts the library batch.
+ * @param onStopLibrary called when the user stops the library batch.
  * @param labEnabled whether the developer Lab is switched on (brief §4.5).
  * @param onLabEnabledChange called when the Lab switch is toggled.
  * @param onOpenLab called when the user opens the Lab.
@@ -101,13 +114,16 @@ fun DjSetupScreen(
     onStart: () -> Unit,
     onCancel: () -> Unit,
     onDismissResult: () -> Unit,
+    libraryState: LibraryAnalysisState,
+    onAnalyseLibrary: () -> Unit,
+    onStopLibrary: () -> Unit,
     labEnabled: Boolean,
     onLabEnabledChange: (Boolean) -> Unit,
     onOpenLab: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
 ) {
-    val building = startState is DjStartState.Building
+    val building = startState is DjStartState.Building || startState is DjStartState.Preparing
     Column(
         modifier =
             modifier
@@ -215,6 +231,7 @@ fun DjSetupScreen(
                 null -> Unit
             }
         }
+        LibraryAnalysisCard(libraryState, onStart = onAnalyseLibrary, onStop = onStopLibrary)
         LabSwitch(labEnabled, onLabEnabledChange, onOpenLab)
         Spacer(Modifier.height(24.dp))
     }
@@ -338,6 +355,10 @@ private fun StatusCard(
             }
         }
 
+        is DjStartState.Preparing -> {
+            PreparingCard(state.progress, onCancel)
+        }
+
         is DjStartState.Started -> {
             ResultCard(
                 title = stringResource(Res.string.dj_started_title),
@@ -359,10 +380,61 @@ private fun StatusCard(
                         DjStartState.Reason.ERROR -> {
                             stringResource(Res.string.dj_failed_error)
                         }
+
+                        DjStartState.Reason.NOT_ENOUGH_STORAGE -> {
+                            stringResource(Res.string.dj_failed_storage)
+                        }
                     },
                 error = true,
                 onDismiss = onDismiss,
             )
+        }
+    }
+}
+
+/** "Preparing your mix": "Analysing 7 of 18", a progress bar, the song being worked on and Cancel (brief §5.1). */
+@Composable
+private fun PreparingCard(
+    progress: PreparationProgress,
+    onCancel: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(Res.string.dj_preparing_title), style = MaterialTheme.typography.titleMedium)
+            LinearProgressIndicator(progress = { progress.fraction }, modifier = Modifier.fillMaxWidth())
+            Text(
+                stringResource(Res.string.dj_preparing_progress, progress.current, progress.total),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            progress.currentTitle?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (progress.alreadyKnown > 0) {
+                Text(
+                    pluralStringResource(Res.plurals.dj_preparing_known, progress.alreadyKnown, progress.alreadyKnown),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (progress.failed > 0) {
+                Text(
+                    pluralStringResource(Res.plurals.dj_preparing_skipped, progress.failed, progress.failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                stringResource(Res.string.dj_preparing_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text(stringResource(Res.string.dj_cancel)) }
         }
     }
 }

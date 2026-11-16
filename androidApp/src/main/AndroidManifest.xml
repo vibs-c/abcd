@@ -460,6 +460,13 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
+        <!-- abcd DJ Mode: "Analyse my library" batch (docs/UPSTREAM_CHANGES.md) -->
+        <service
+            android:name="com.aiqulabs.abcd.dj.host.DjAnalysisService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
         <service
             android:name="com.metrolist.android.playback.MusicService"
             android:enabled="true"

@@ -3,6 +3,7 @@ package com.aiqulabs.abcd.dj.ui.lab
 import com.aiqulabs.abcd.dj.core.analysis.DjDatabaseCounts
 import com.aiqulabs.abcd.dj.core.analysis.StoredAnalysis
 import com.aiqulabs.abcd.dj.core.analysis.TrackSummary
+import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisState
 
 /** A song whose audio file is on the phone (downloaded, or played recently and cached). */
 data class LabLocalSong(
@@ -47,6 +48,9 @@ data class LabState(
     val detail: LabDetail? = null,
     val busy: LabBusy? = null,
     val message: LabMessage? = null,
+    val library: LibraryAnalysisState = LibraryAnalysisState.Idle,
+    /** Bytes of songs abcd downloaded for analysis (not Metrolist's own downloads or cache). */
+    val audioFilesBytes: Long = 0L,
 )
 
 /** What the Lab screens can ask for. */
@@ -57,5 +61,8 @@ data class LabActions(
     val onDelete: (videoId: String) -> Unit,
     val onDismissMessage: () -> Unit,
     val onPickFile: () -> Unit,
+    val onAnalyseLibrary: () -> Unit,
+    val onStopLibrary: () -> Unit,
+    val onClearAudioFiles: () -> Unit,
     val onBack: () -> Unit,
 )

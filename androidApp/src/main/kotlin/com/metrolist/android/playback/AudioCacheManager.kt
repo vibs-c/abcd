@@ -846,6 +846,53 @@ class AudioCacheManager(
         storageLock.song(song.id) { storeAudioFile(song, resource, KIND_DOWNLOAD, control, onProgress) }
     }
 
+    /**
+     * abcd DJ Mode: downloads [resource]'s audio into [target] and nothing else. Unlike [downloadSong] it
+     * never touches the cache database, the download list, the library or the user's download folder: the
+     * caller owns [target] and deletes it. Returns the audio MIME type. The file is left as the server sent
+     * it (webm or m4a), which Android's MediaExtractor reads directly.
+     */
+    suspend fun downloadToFile(
+        resource: PlaybackResource,
+        target: File,
+        control: AudioDownloadControl? = null,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
+    ): String =
+        withContext(Dispatchers.IO) {
+            requireDownloadableAudioResource(resource)
+            val directory = checkNotNull(target.absoluteFile.parentFile) { "Target has no folder" }
+            directory.mkdirs()
+            if (directory.usableSpace <= MIN_FREE_SPACE_BYTES) throw InsufficientAudioStorageException()
+            target.delete()
+            try {
+                val mimeType =
+                    if (resource.isSabr) {
+                        withSabrDownloadControl(control) {
+                            downloadSabrAudio(
+                                resource,
+                                target,
+                                maxBytes = MAX_AUDIO_BYTES,
+                                awaitReady = { control?.awaitIfPaused() },
+                                onProgress = onProgress,
+                            )
+                        }
+                        checkNotNull(resource.sabrBootstrap).mimeType.substringBefore(';')
+                    } else {
+                        downloadWithRangeFallback(
+                            control = control,
+                            range = { downloadWithRanges(resource, target, control, onProgress) },
+                            single = { downloadSingleStream(resource, target, control, onProgress, MAX_AUDIO_BYTES) },
+                            onRangeFailure = { Timber.tag(TAG).w(it, "range download failed, falling back to single stream") },
+                        )
+                    }
+                check(target.length() >= MIN_AUDIO_BYTES) { "Downloaded audio is too small" }
+                mimeType
+            } catch (e: Throwable) {
+                target.delete()
+                throw e
+            }
+        }
+
     @OptIn(ExperimentalCoilApi::class)
     private suspend fun storeAudioFile(
         song: SongItem,

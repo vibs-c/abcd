@@ -32,7 +32,8 @@ class MediaCodecPcmDecoder(
         withContext(Dispatchers.IO) {
             val extractor = MediaExtractor()
             try {
-                if (source.location.contains("://")) {
+                // "file:/x" (java.io.File.toURI) has one slash, so test for the scheme, not for "://".
+                if (source.location.contains("://") || source.location.startsWith("file:")) {
                     extractor.setDataSource(appContext, Uri.parse(source.location), null)
                 } else {
                     extractor.setDataSource(source.location)

@@ -313,6 +313,57 @@ Known gaps against the brief, not fixed now (planned):
   about 25 s (software codec on an emulated CPU) plus 7.5 s to analyse; expect far faster decoding on a
   phone. Worth checking on the real phone because stage 6 analyses 20+ songs in a row.
 
+## 2026-11-17 · Stage 6: pre-analysis before playback
+
+- **Flow of "Start DJ":** build the playlist (stage 3) → drop blocked songs → check free space →
+  **prepare** (analyse every track not already analysed with the current algorithm version) → **order**
+  the analysed tracks → hand them to Metrolist's player. Playback starts only once the whole prepared
+  playlist is analysed (brief §5.1). The Preparing card shows "Analysing 7 of 18", a progress bar, the
+  song being worked on, how many were already analysed or replaced, and Cancel.
+- **`SessionPreparer` (dj-core, pure Kotlin, unit-tested)** works through the plan in order, up to two
+  tracks at once (one's download overlaps another's analysis). A failed track is dropped and the next
+  spare takes its place until the session has its core count or the spares run out. Batches never
+  exceed the number of tracks still needed, so the result is the same as doing it one by one.
+- **Only one native analysis runs at a time** (a lock inside `NativeAudioAnalyzer`). Essentia's one-time
+  setup is not guaranteed thread-safe, and two analyses would double the memory use. Download and decode
+  of the next track still overlap with the current analysis.
+- **Audio comes from `DjAudioProvider`:** a file Metrolist already holds (downloaded/cached) is used
+  as it is; otherwise the audio is downloaded into `cache/dj-audio/` by the new public
+  `AudioCacheManager.downloadToFile` (the owner chose this "proper" option; logged in
+  UPSTREAM_CHANGES.md). It reuses Metrolist's resolver, range/SABR download code and storage checks,
+  and writes nothing to Metrolist's cache database, library or download list. Downloads go to a
+  `.part` file and are renamed only when complete, so a crash cannot leave a half file that looks
+  usable. If a file Metrolist holds cannot be decoded, the song is downloaded fresh once.
+- **Session files are kept, not deleted straight away:** the files of a session's tracks stay in
+  `cache/dj-audio/` so the mixing engine (stage 8) can play them; the next session deletes everything
+  not in its own playlist, and the Lab shows the size with a "Delete files" button. Android may also
+  reclaim `cacheDir` when storage is low, so the engine must treat a missing file as "download again".
+  Tracks that were already analysed are not downloaded in stage 6; stage 8 fetches missing files then.
+  Library batches delete each file right after analysis.
+- **Storage check:** before preparing, the app needs 10 MB per track still to analyse plus 64 MB spare;
+  otherwise the card says there is not enough space. The download itself also refuses below 16 MB free
+  (Metrolist's own rule).
+- **Ordering after analysis (`PlaylistOrderer`, dj-core):** a greedy pass: first the track that fits the
+  start of the energy arc, then repeatedly the remaining track with the best score
+  `bpmWeight·bpmCompat + keyWeight·keyCompat + energyWeight·energyFit − same-artist penalty`.
+  bpmCompat is 1.0 within ±6% (half/double time allowed) falling to 0 at 25%; keyCompat uses the Camelot
+  wheel (same 1.0, relative or ±1 0.9, ±2 0.5); untrusted tempo/key score neutral (0.5). Energy is each
+  track's mean bar loudness stretched to 0..1 across the playlist, compared with the arc's target
+  (steady, build-up, peak-and-cooldown, wave). All weights are in `ScoringConfig`; vibe, freshness and
+  feedback weights exist at 0 for later. v2's look-ahead search replaces the greedy pass behind the same
+  function (§7.4). The chosen order is logged (tag `DjController`: BPM, key, energy per track).
+- **Analyse my library:** a card in the DJ tab and in the Lab. It runs in a foreground service
+  (`DjAnalysisService`, type `dataSync`, with a progress notification and a Stop button) so it keeps
+  going in the background. It takes downloaded songs first, then liked, then the rest of the library,
+  skips ones already analysed, and does at most 200 songs per run (the finished card says how many are
+  left; tap again to continue). Songs over 10 minutes, podcasts, uploads and blocked songs are skipped.
+- **Not done / for later:** lyrics are still not wired into `ChorusRanker` (needs the lyrics source and
+  language tags; stage 11 uses it for the chorus editor). Candidate sources still lack charts and mood
+  pages (§7.1).
+- **Emulator caveat:** YouTube downloads did not work on the emulator in stage 5, so the real download
+  path (resolver → `downloadToFile` → decode → analyse) is exercised by an instrumented test that skips
+  itself without network, and must be confirmed on the phone.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.
