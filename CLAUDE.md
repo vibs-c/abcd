@@ -65,31 +65,40 @@ stage 7 is design-only and waits for the owner's "Approved".
 | `desktopApp`, `iosApp` | Other platforms | Out of scope for now |
 | InnerTubeX | External JitPack dependency (the brief's `innertube/`) | Not in this repo |
 
-DJ modules (created stage by stage; brief Â§10):
+DJ modules (brief §10; package `com.aiqulabs.abcd.dj.<module>`):
 
-| Module | Contents |
-|---|---|
-| `dj-core` | Pure Kotlin. Session settings, track/analysis models, playlist builder, scoring config, technique selection, `VibeParser`/`TrackTagger` interfaces |
-| `dj-native` | C++ via CMake/NDK: analysis hot paths, effect DSP, JNI |
-| `dj-analysis` | MediaCodec decode to PCM, `AudioAnalyzer` interface + native impl, pre-analysis service |
-| `dj-data` | Separate Room DB `abcd_dj.db`, DAOs, repositories |
-| `dj-engine` | `DjMixEngine`, two decks, AudioProcessors, sync loop |
-| `dj-ui` | Compose screens: Setup, Preparing, Live, Chorus editor, Lab |
+| Module | Type | Contents | Status |
+|---|---|---|---|
+| `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, later scoring/technique selection | Has code + tests |
+| `dj-native` | Android lib | C++ via CMake/NDK: analysis hot paths, effect DSP, JNI | Empty (stage 4) |
+| `dj-analysis` | Android lib | MediaCodec decode to PCM, `AudioAnalyzer` + native impl, pre-analysis | Empty (stages 4, 6) |
+| `dj-data` | Android lib | Separate Room DB `abcd_dj.db`, DAOs, repositories | Empty (stage 5) |
+| `dj-engine` | Android lib | `DjMixEngine`, two decks, AudioProcessors, sync loop | Empty (stage 8) |
+| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Empty (stage 3) |
+
+**Host glue rule:** a library cannot depend on `androidApp`. Code that touches Metrolist internals
+(`PlayerConnection`, `AudioCacheManager`, `MusicService`, stream resolver) goes in new files under
+`androidApp/.../com/aiqulabs/abcd/dj/host/`, implementing interfaces defined in the `dj-*` modules.
+Study notes with the details: `docs/DECISIONS.md` → "Codebase study".
 
 ## Key Metrolist classes (Android)
 
 Path prefix `androidApp/src/main/kotlin/com/metrolist/android/`.
 
-- `playback/MusicService.kt`: `MediaLibraryService`, media session, notification, Android Auto.
-- `playback/ExoPlaybackPlayer.kt`: builds ExoPlayer(s), renderers, `NormalizationAudioProcessor`.
+- `playback/MusicService.kt`: `MediaLibraryService`; `MediaLibrarySession` around `MediaSessionPlayer`.
+- `playback/ExoPlaybackPlayer.kt`: implements `AndroidPlaybackPlayer`; owns two ExoPlayers (`exo`,
+  `nextPlayer`) and the `MusicQueue`; audio chain via `SilenceSkippingSupport.renderersFactory`.
 - `playback/AndroidQueueTransitions.kt`: crossfade (`PlaybackCrossfadeController`), next-track preload.
-- `playback/AndroidQueueCoordinator.kt`: queue; `MediaSessionPlayer.kt`: session-facing player wrapper.
-- `playback/PlayerConnection.kt`: UI-side connection to the service (StateFlows).
-- `playback/AudioCacheManager.kt`, `SongDownloadManager.kt`: cached/downloaded audio (reuse for analysis).
+- `playback/MediaSessionPlayer.kt`: session-facing adapter over `AndroidPlaybackPlayer`.
+- `playback/PlayerConnection.kt`: UI-side connection; `playQueue(songs, finite = true)` plays a list.
+- `playback/AudioCacheManager.kt`, `SongDownloadManager.kt`: cached/downloaded audio files, SABR download.
 - `playback/EqualizerAudioProcessor.kt`: existing AudioProcessor pattern.
-- `ui/MetrolistApp.kt`: root composable and navigation; `di/AppModule.kt`, `di/ViewModelsModule.kt`: Koin.
-- Shared: `shared/.../db/MusicDatabase.kt` (Room 3, `androidx.room3`), `shared/.../repository/YouTubeRepository`,
-  `SongItem`/`YTItem` models, `Settings.shared` + `PreferenceKeys.kt`, lyrics in `shared/.../playback`.
+- `ui/MetrolistApp.kt`: `entryProvider` registers screens; `ui/Navigation.kt`: bottom bar items.
+- `di/AppModule.kt`, `di/ViewModelsModule.kt`: Koin.
+- Shared: `shared/.../api/YouTubeRepository.kt` (`searchFiltered`, `startRadio`; `GlobalYouTubeRepository.instance`),
+  `shared/.../repository/LyricsRepository.kt`, `shared/.../db/MusicDatabase.kt` (Room 3),
+  `shared/.../ui/navigation/Screen.kt`, `shared/.../ui/theme/CommonTheme.kt` (`MetrolistTheme`),
+  `SongItem`/`YTItem` models, `Settings.shared` + `PreferenceKeys.kt`.
 
 ## Conventions (from AGENTS.md, still apply)
 

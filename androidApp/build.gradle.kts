@@ -391,6 +391,10 @@ dependencies {
     implementation(project(":opusDecoder"))
     // abcd DJ Mode
     implementation(project(":dj-core"))
+    implementation(project(":dj-analysis"))
+    implementation(project(":dj-data"))
+    implementation(project(":dj-engine"))
+    implementation(project(":dj-ui"))
     implementation(libs.media3.inspector)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.session)

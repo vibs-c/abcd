@@ -27,12 +27,12 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
   TV banner. Replace them when there is a final abcd logo.
 - **Check:** an app called abcd, with its own icon, installs next to Metrolist and plays music as before.
 
-## 2. Study the code and create the empty modules · Opus · 🟡 (brief §3, §10)
+## 2. Study the code and create the empty modules · Opus · ✅ (brief §3, §10)
 
-- **Done:** CLAUDE.md with the module map and key classes; `dj-core` exists with real content (see stage 3).
-- **Remaining:** study the player/service, queue, crossfade, InnerTubeX APIs, lyrics, navigation,
-  theming and DI, and write the findings to `docs/DECISIONS.md`; update CLAUDE.md. Create the empty
-  modules `dj-native`, `dj-analysis`, `dj-data`, `dj-engine`, `dj-ui` and wire them in.
+- **Done:** study notes in `docs/DECISIONS.md` ("Codebase study" plus two new decisions: Android glue
+  lives in `androidApp` under `com.aiqulabs.abcd.dj.host`, and analysis audio comes from a temporary
+  download). CLAUDE.md updated. Empty Android library modules `dj-native`, `dj-analysis`, `dj-data`,
+  `dj-engine`, `dj-ui` created and wired into `androidApp`.
 - **Check:** the app builds and looks the same. Skim the new notes in `docs/DECISIONS.md`.
 
 ## 3. DJ tab, setup screen and playlist · Sonnet · 🟡 (brief §4.1, §4.2, §7)
@@ -98,6 +98,19 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
 - Waveform, draggable handles that snap to beats, add/delete, choose the main chorus, preview, save
   as `source = USER`. Re-analysis never overwrites user edits.
 - **Check:** fix a chorus, save, re-analyse in Lab: the fix survives, and Chorus Hits uses it.
+
+## Backlog (found during testing; not scheduled yet)
+
+- **Debug build feels laggy** (owner, stage 1). Expected for debug builds (no R8, Compose debug).
+  Judge on a release build in stage 12; profile only if the release build is also slow.
+- **Setup/onboarding pages still say "Metrolist"** (owner, stage 1). 67 English strings name it.
+  Fix: replace the brand in `values/strings.xml` (translations keep "Metrolist" until a decision on
+  touching Weblate-managed locale files).
+- **Update checker points at Metrolist's GitHub** (`shared/.../update/LatestRelease.kt`, on by
+  default). abcd would offer Metrolist's APK as an "update". Fix: turn it off for abcd, or point it at
+  abcd's own releases (a network endpoint change, so ask first).
+- **About/Discord links and lyrics-API referrer headers name Metrolist's repo.** Decide what abcd shows.
+- **Sentry in release builds** sends opt-in crash reports to Metrolist's project. Handled in stage 12.
 
 ## 12. Make v1 stable and build a release · Opus · ⬜ (brief §1)
 

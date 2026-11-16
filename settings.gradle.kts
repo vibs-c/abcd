@@ -66,3 +66,8 @@ include(":desktopApp")
 
 // abcd DJ Mode modules (see CLAUDE.md)
 include(":dj-core")
+include(":dj-native")
+include(":dj-analysis")
+include(":dj-data")
+include(":dj-engine")
+include(":dj-ui")
