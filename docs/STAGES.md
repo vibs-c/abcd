@@ -91,7 +91,7 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
   track; rolling 2-track preparation; WebM/Opus decoded in-process with libopus. 12 new tracks prepare in
   ~45 s on the emulator (was ~245 s). Details in DECISIONS.md.
 
-## 7. Mixing-engine design · Opus · ⬜ (brief §9.1) — design only, no code
+## 7. Mixing-engine design · Opus · ✅ approved 2026-11-17 (brief §9.1) — `docs/DJ_ENGINE_DESIGN.md`
 
 - Write `docs/DJ_ENGINE_DESIGN.md`: exactly how `DjMixEngine` takes exclusive control of playback and
   the media session when DJ Mode starts, and hands it back cleanly when it ends, including
