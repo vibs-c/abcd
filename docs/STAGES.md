@@ -85,6 +85,11 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
   Details in `docs/DECISIONS.md` ("Stage 6").
 - **Check:** the first mix shows "Analysing 7 of 18"; a second mix with the same choices starts much
   faster.
+- **6b** (`1dede06`, APK `abcd-stage-6b.apk`): fixed out-of-memory while preparing, and refused (HTTP 403)
+  downloads now retry with a fresh SABR stream, as Metrolist's own downloads do.
+- **6c** (`f964e7f`, `93c06a2`, APK `abcd-stage-6c.apk`): progress card scrolls into view and counts every
+  track; rolling 2-track preparation; WebM/Opus decoded in-process with libopus. 12 new tracks prepare in
+  ~45 s on the emulator (was ~245 s). Details in DECISIONS.md.
 
 ## 7. Mixing-engine design · Opus · ⬜ (brief §9.1) — design only, no code
 
