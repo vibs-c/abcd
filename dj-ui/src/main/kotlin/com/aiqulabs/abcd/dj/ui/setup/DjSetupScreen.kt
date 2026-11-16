@@ -33,6 +33,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.aiqulabs.abcd.dj.ui.live.DjLiveUi
+import com.aiqulabs.abcd.dj.ui.live.DjNowMixingCard
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -123,13 +125,17 @@ fun DjSetupScreen(
     onOpenLab: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(),
+    live: DjLiveUi? = null,
+    onLivePlayPause: () -> Unit = {},
+    onLiveNext: () -> Unit = {},
+    onLiveEnd: () -> Unit = {},
 ) {
     val building = startState is DjStartState.Building || startState is DjStartState.Preparing
     val scroll = rememberScrollState()
     // The status card sits at the top, but "Start DJ" is near the bottom: bring the card into view when
     // a mix starts or finishes, otherwise preparation looks frozen (only the greyed-out button is visible).
-    val statusShown = startState !is DjStartState.Idle
-    LaunchedEffect(startState::class, statusShown) {
+    val statusShown = startState !is DjStartState.Idle || live != null
+    LaunchedEffect(startState::class, live != null) {
         if (statusShown) scroll.animateScrollTo(0)
     }
     Column(
@@ -149,7 +155,9 @@ fun DjSetupScreen(
             )
         }
 
-        StatusCard(startState, onCancel, onDismissResult)
+        live?.let { DjNowMixingCard(it, onPlayPause = onLivePlayPause, onNext = onLiveNext, onEnd = onLiveEnd) }
+        // While a mix plays, its card replaces the "Your mix is playing" result.
+        if (live == null || startState !is DjStartState.Started) StatusCard(startState, onCancel, onDismissResult)
 
         Section(stringResource(Res.string.dj_section_languages)) {
             FlowRow(

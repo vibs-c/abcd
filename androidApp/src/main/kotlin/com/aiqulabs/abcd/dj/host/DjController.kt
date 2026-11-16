@@ -142,18 +142,28 @@ object DjController {
 
         val ordered = PlaylistOrderer().order(prepared.tracks, plan.settings)
         logOrder(ordered)
-        val songs = ordered.mapNotNull { source.songFor(it.track.videoId) }
-        val title = getString(Res.string.dj_queue_title)
-        withContext(Dispatchers.Main) {
-            playerConnection.playQueue(
-                songs = songs,
-                startIndex = 0,
-                queueTitle = title,
-                finite = true,
-                shuffleModeEnabled = false,
-            )
-        }
-        return DjStartState.Started(songs.size)
+        // Stage 8: the mix plays through the DJ engine (its own two decks), not Metrolist's queue.
+        val songs = ordered.mapNotNull { t -> source.songFor(t.track.videoId)?.let { t.track.videoId to it } }.toMap()
+        val playable =
+            ordered.mapNotNull { t ->
+                val song = songs[t.track.videoId] ?: return@mapNotNull null
+                t.copy(
+                    track =
+                        t.track.copy(
+                            thumbnailUrl = t.track.thumbnailUrl ?: song.thumbnail,
+                            durationMs = t.track.durationMs ?: t.analysis.durationMs.toLong(),
+                        ),
+                )
+            }
+        val started =
+            withContext(Dispatchers.Main) {
+                // Metrolist binds its music service lazily; the DJ host lives in it, so make sure it is up.
+                runCatching { playerConnection.awaitConnected() }
+                    .onFailure { Timber.tag(TAG).w(it, "Music service did not connect") }
+                DjPlayback.start(playable, songs, plan.settings)
+            }
+        if (!started) return DjStartState.Failed(DjStartState.Reason.ERROR)
+        return DjStartState.Started(playable.size)
     }
 
     /** One line per track so the chosen order can be checked in the log (BPM, key, energy). */

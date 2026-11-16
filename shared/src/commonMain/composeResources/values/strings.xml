@@ -5547,6 +5547,26 @@
     </plurals>
     <string name="dj_preparing_hint">The first mix takes a few minutes. Songs stay analysed, so the next mix starts much faster.</string>
 
+    <!-- abcd DJ Mode: Lab problem report -->
+    <string name="dj_lab_log_title">Problem report</string>
+    <string name="dj_lab_log_desc">Copies the recent DJ log (which songs failed and why) so you can paste it into a bug report. Nothing is sent anywhere.</string>
+    <string name="dj_lab_log_copy">Copy DJ log</string>
+    <string name="dj_lab_log_copied">DJ log copied. Paste it into your message.</string>
+
+    <!-- abcd DJ Mode: the mix playing (stage 8) -->
+    <string name="dj_now_mixing">Now mixing</string>
+    <string name="dj_starting_mix">Starting the mix…</string>
+    <string name="dj_up_next">Up next: %1$s</string>
+    <string name="dj_last_song">Last song of the mix</string>
+    <string name="dj_mixing_into">Mixing into %1$s</string>
+    <string name="dj_paused">Paused</string>
+    <string name="dj_waiting_for_focus">Waiting for the other audio (a call?) to finish</string>
+    <string name="dj_mix_progress">Song %1$d of %2$d</string>
+    <string name="dj_play">Play</string>
+    <string name="dj_pause">Pause</string>
+    <string name="dj_next">Next</string>
+    <string name="dj_end_session">End session</string>
+
     <!-- abcd DJ Mode: analyse my library -->
     <string name="dj_library_title">Analyse my library</string>
     <string name="dj_library_desc">Analyses your liked, library and downloaded songs in the background so mixes start faster.</string>

@@ -1,5 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import com.aiqulabs.abcd.dj.analysis.AnalysisGate
 import com.aiqulabs.abcd.dj.analysis.MediaCodecPcmDecoder
@@ -83,6 +85,18 @@ object DjLabController {
     }
 
     /** Deletes the songs abcd downloaded for analysis. Metrolist's own downloads and cache are not touched. */
+    /** Copies the recent DJ log to the clipboard so the owner can paste it into a bug report. */
+    fun copyLog() {
+        val context = attachedTo ?: return
+        scope.launch {
+            val report = withContext(Dispatchers.IO) { DjLog.collect() }
+            val clipboard = context.getSystemService(ClipboardManager::class.java)
+            clipboard.setPrimaryClip(ClipData.newPlainText("abcd DJ log", report))
+            mutableState.update { it.copy(message = LabMessage.LogCopied) }
+            Timber.tag(TAG).i("DJ log copied: %d lines", report.lines().size)
+        }
+    }
+
     fun clearAudioFiles() {
         val context = attachedTo ?: return
         scope.launch {

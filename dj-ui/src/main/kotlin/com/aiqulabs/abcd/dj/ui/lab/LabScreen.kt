@@ -29,6 +29,10 @@ import com.aiqulabs.abcd.dj.core.analysis.TrackSummary
 import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisCard
 import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.dj_audio_files_clear
+import com.metrolist.shared.generated.resources.dj_lab_log_copied
+import com.metrolist.shared.generated.resources.dj_lab_log_copy
+import com.metrolist.shared.generated.resources.dj_lab_log_desc
+import com.metrolist.shared.generated.resources.dj_lab_log_title
 import com.metrolist.shared.generated.resources.dj_audio_files_size
 import com.metrolist.shared.generated.resources.dj_audio_files_title
 import com.metrolist.shared.generated.resources.dj_lab_analyse
@@ -147,6 +151,18 @@ fun LabScreen(
                 }
             }
         }
+
+        item { SectionTitle(stringResource(Res.string.dj_lab_log_title)) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(Res.string.dj_lab_log_desc),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = actions.onCopyLog) { Text(stringResource(Res.string.dj_lab_log_copy)) }
+            }
+        }
     }
 }
 
@@ -190,6 +206,7 @@ private fun StatusCards(
                 LabMessage.NoAudioFile -> stringResource(Res.string.dj_lab_error_no_file)
                 LabMessage.UnsupportedFile -> stringResource(Res.string.dj_lab_error_unsupported)
                 is LabMessage.Failed -> stringResource(Res.string.dj_lab_error_failed, message.reason)
+                LabMessage.LogCopied -> stringResource(Res.string.dj_lab_log_copied)
             }
         Card(
             modifier = Modifier.fillMaxWidth(),

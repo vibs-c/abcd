@@ -1,4 +1,5 @@
-// dj-engine: DjMixEngine: two decks, AudioProcessors, sync loop, gain matching. Design in docs/DJ_ENGINE_DESIGN.md (stage 7) must be approved before code (stage 8).
+// dj-engine: DjMixEngine: two decks (ExoPlayer + our audio chain), audio focus, transitions, and the
+// media-session player shown while DJ Mode is on. Design: docs/DJ_ENGINE_DESIGN.md (approved stage 7).
 // Android library. Kotlin is compiled by AGP's built-in Kotlin support, as in androidApp.
 plugins {
     alias(libs.plugins.android.library)
@@ -21,6 +22,12 @@ android {
 }
 
 dependencies {
-    implementation(project(":dj-core"))
+    api(project(":dj-core"))
     implementation(project(":dj-native"))
+    api(libs.media3.exoplayer)
+    api(libs.media3.common)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.annotation)
+
+    testImplementation(libs.junit4)
 }

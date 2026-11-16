@@ -43,6 +43,7 @@ class MediaCodecPcmDecoder(
                     Log.w(TAG, "In-app Opus decoding failed, using the platform decoder", e)
                     null
                 }
+            if (inApp == null) Log.i(TAG, "Platform decoder for ${source.location.substringAfterLast('/')}")
             inApp ?: decodeWithMediaCodec(source)
         }
 

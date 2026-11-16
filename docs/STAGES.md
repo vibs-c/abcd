@@ -98,7 +98,7 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
   backgrounding and phone calls. Then explain it in plain words and list what could go wrong.
 - **Check:** you understand the summary. Reply **Approved** to unlock stage 8.
 
-## 8. Two-deck engine with fades · Opus · ⬜ (brief §9.1)
+## 8. Two-deck engine with fades · Opus · ✅ built, awaiting phone test (brief §9.1)
 
 - Implement the approved design: two decks, the exclusive handoff, LUFS gain matching, the limiter,
   the classic fade. DJ sessions play through `DjMixEngine`.

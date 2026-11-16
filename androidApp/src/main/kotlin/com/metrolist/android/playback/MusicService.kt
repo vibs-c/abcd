@@ -1,5 +1,7 @@
 package com.metrolist.android.playback
 
+import com.aiqulabs.abcd.dj.host.DjPlayback
+import com.aiqulabs.abcd.dj.host.DjPlaybackHost
 import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.content.ComponentName
@@ -285,6 +287,9 @@ class MusicService :
     var media3Player: Player? = null
         private set
     private var mediaSession: MediaLibrarySession? = null
+
+    /** abcd DJ Mode hand-over (docs/DJ_ENGINE_DESIGN.md). */
+    private lateinit var djHost: DjPlaybackHost
     internal var playbackCommandGeneration = 0L
         private set
     private lateinit var playbackRestoreJob: Job
@@ -530,7 +535,7 @@ class MusicService :
             SleepTimerController(
                 scope = serviceScope,
                 player =
-                    MusicSleepTimerPlayer(player, pausePlayback = { media3Player?.pause() }) {
+                    MusicSleepTimerPlayer(player, pausePlayback = { if (djHost.isActive) djHost.pause() else media3Player?.pause() }) {
                         transitions.cancelAndroidCrossfade()
                         transitions.cancelNextTrackPreload()
                     },
@@ -546,6 +551,7 @@ class MusicService :
         registerVolumeMuteObserver()
         observeAndroidAutoConnection()
         setupMediaSession()
+        setupDjPlayback()
         observePlaybackEvents()
         observeCastState()
         listeningHistory.start()
@@ -878,6 +884,58 @@ class MusicService :
                 .setName(getString(R.string.playback_notification_channel_name))
                 .build(),
         )
+    }
+
+    /**
+     * abcd DJ Mode (docs/DJ_ENGINE_DESIGN.md §5, §9): creates the hand-over host and the one guard that keeps
+     * Metrolist's player and the DJ engine from ever playing side by side. Whenever Metrolist's player is
+     * asked to play (app, widget, Auto through Metrolist's own session player), DJ Mode ends first.
+     */
+    private fun setupDjPlayback() {
+        djHost =
+            DjPlaybackHost(
+                context = this,
+                scope = serviceScope,
+                ops =
+                    object : DjPlaybackHost.Ops {
+                        override fun canStartDj(): Boolean =
+                            !castManager.state.value.isConnected && !AndroidListenTogetherManager.isGuestPlaybackLocked
+
+                        override fun stopNormalPlayback(): Long? {
+                            val position = player.currentPosition.value.takeIf { player.currentSong.value != null }
+                            savePlaybackState()
+                            player.stop()
+                            return position
+                        }
+
+                        override fun restoreNormalPlayback(positionMs: Long) {
+                            player.retryPendingQueuePlayback(positionMs = positionMs, resumePlayback = false)
+                        }
+
+                        override fun setSessionPlayer(player: Player?) {
+                            val target = player ?: media3Player ?: return
+                            mediaSession?.let { if (it.player !== target) it.player = target }
+                        }
+
+                        override fun playForeign(
+                            items: List<MediaItem>,
+                            startIndex: Int,
+                            startPositionMs: Long,
+                        ) {
+                            media3Player?.run {
+                                setMediaItems(items, startIndex, startPositionMs)
+                                prepare()
+                                play()
+                            }
+                        }
+                    },
+            )
+        DjPlayback.host = djHost
+        serviceScope.launch {
+            player.wantsPlaybackState.collect { wants ->
+                if (wants && djHost.isActive && !djHost.isEntering) djHost.exit(fadeOutMs = 0L, restoreNormal = false)
+            }
+        }
     }
 
     private fun setupMediaSession() {
@@ -2911,6 +2969,8 @@ class MusicService :
         playbackBenchmark.cancel()
         super.onTaskRemoved(rootIntent)
         if (!::player.isInitialized) return
+        // abcd DJ Mode: a paused DJ session ends with the task, like Metrolist's paused playback.
+        if (::djHost.isInitialized && djHost.isActive && DjPlayback.state.value?.playWhenReady != true) djHost.exitNow()
         saveFinalPlaybackState()
         flushPodcastProgress()
         taskRemoved.value = true
@@ -2944,6 +3004,10 @@ class MusicService :
         castManager.closeImmediately()
         serviceScope.cancel()
         contentResolver.unregisterContentObserver(volumeMuteObserver)
+        if (::djHost.isInitialized) {
+            djHost.exitNow()
+            if (DjPlayback.host === djHost) DjPlayback.host = null
+        }
         mediaSession?.release()
         MediaArtworkProvider.currentArtwork = null
         player.release()

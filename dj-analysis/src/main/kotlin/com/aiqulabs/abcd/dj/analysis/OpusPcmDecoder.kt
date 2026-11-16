@@ -196,6 +196,13 @@ internal class OpusPcmDecoder(
                 finished = true
                 val mono = sink ?: return null
                 if (mono.size == 0) throw IOException("Decoder produced no audio")
+                // Safety net: a file this path cannot fully read must not pass as a short song. Let MediaCodec try.
+                if (durationUs > 0) {
+                    val decodedUs = mono.size * 1_000_000L / SAMPLE_RATE
+                    if (decodedUs < durationUs * MIN_COMPLETE_FRACTION) {
+                        throw IOException("In-app decode stopped early: ${decodedUs / 1000} of ${durationUs / 1000} ms")
+                    }
+                }
                 return mono.toPcmAudio(SAMPLE_RATE)
             } finally {
                 opus.release()
@@ -307,5 +314,8 @@ internal class OpusPcmDecoder(
         const val BUFFERS = 16
         const val PACKET_BYTES = 8 * 1024
         const val WAIT_NANOS = 200_000L
+
+        /** Decoded audio shorter than this share of the container's duration counts as a failed decode. */
+        const val MIN_COMPLETE_FRACTION = 0.9
     }
 }

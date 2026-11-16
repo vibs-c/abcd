@@ -38,6 +38,9 @@ sealed interface LabMessage {
     data class Failed(
         val reason: String,
     ) : LabMessage
+
+    /** The DJ log was copied to the clipboard for a bug report. */
+    data object LogCopied : LabMessage
 }
 
 /** Everything the Lab screens show. */
@@ -65,4 +68,6 @@ data class LabActions(
     val onStopLibrary: () -> Unit,
     val onClearAudioFiles: () -> Unit,
     val onBack: () -> Unit,
+    /** Copies the recent DJ log (failures and their reasons) for a bug report. */
+    val onCopyLog: () -> Unit = {},
 )

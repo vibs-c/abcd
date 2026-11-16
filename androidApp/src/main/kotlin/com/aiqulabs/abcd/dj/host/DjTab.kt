@@ -1,5 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
+import com.aiqulabs.abcd.dj.engine.DjEngineState
+import com.aiqulabs.abcd.dj.ui.live.DjLiveUi
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -39,6 +41,7 @@ fun DjTab(modifier: Modifier = Modifier) {
     var labOpen by remember { mutableStateOf(false) }
     val startState by DjController.state.collectAsState()
     val libraryState by DjLibraryAnalyzer.state.collectAsState()
+    val engineState by DjPlayback.state.collectAsState()
     // Same insets as the Home and Library tabs: below the top bar, above the mini player.
     val insets = PaddingValues(top = tabContentTopPadding(), bottom = LocalMiniPlayerBottomInset.current)
 
@@ -70,6 +73,7 @@ fun DjTab(modifier: Modifier = Modifier) {
                     onStopLibrary = DjLabController::stopLibrary,
                     onClearAudioFiles = DjLabController::clearAudioFiles,
                     onBack = { labOpen = false },
+                    onCopyLog = DjLabController::copyLog,
                 ),
             modifier = modifier.fillMaxSize(),
             contentPadding = insets,
@@ -101,6 +105,34 @@ fun DjTab(modifier: Modifier = Modifier) {
         onOpenLab = { labOpen = true },
         modifier = modifier.fillMaxSize(),
         contentPadding = insets,
+        live = engineState?.let(::liveUiOf),
+        onLivePlayPause = DjPlayback::togglePlayPause,
+        onLiveNext = DjPlayback::skipNext,
+        onLiveEnd = DjPlayback::end,
+    )
+}
+
+/** The engine's state as the DJ tab's "Now mixing" card shows it. */
+private fun liveUiOf(state: DjEngineState): DjLiveUi? {
+    if (!state.isActive) return null
+    val status =
+        when (state.phase) {
+            DjEngineState.Phase.STARTING -> DjLiveUi.Status.STARTING
+            DjEngineState.Phase.WAITING_FOR_FOCUS -> DjLiveUi.Status.WAITING_FOR_FOCUS
+            DjEngineState.Phase.PAUSED -> DjLiveUi.Status.PAUSED
+            DjEngineState.Phase.ENDING -> DjLiveUi.Status.ENDING
+            else -> DjLiveUi.Status.PLAYING
+        }
+    val number = state.currentIndex + 1
+    return DjLiveUi(
+        title = state.current?.title,
+        artist = state.current?.artists?.joinToString(", "),
+        nextTitle = state.next?.title,
+        songNumber = if (state.current != null) number else 0,
+        songCount = number + state.upcoming.size,
+        isPlaying = state.playWhenReady,
+        status = status,
+        mixingInto = state.transition?.let { state.next?.title },
     )
 }
 

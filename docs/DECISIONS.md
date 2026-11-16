@@ -418,6 +418,29 @@ Known gaps against the brief, not fixed now (planned):
   phone APK is unaffected. Gradle property changes can leave Room's KSP output stale ("MusicDatabaseConstructor
   has no actual"): run `:shared:kspAndroidMain --rerun`.
 
+## 2026-11-17 · Stage 8: two-deck engine with classic fades
+
+- **Built as designed** (`DJ_ENGINE_DESIGN.md`): `ExoDjMixEngine` in `dj-engine` owns two ExoPlayer decks
+  (local session files, `DeckGainProcessor` = LUFS trim to -14 LUFS minus 2 dB headroom + per-deck -1 dBFS
+  limiter, libopus renderer preferred), its own audio focus (`DjAudioFocus`: calls pause, ducking, becoming
+  noisy) and `DjSessionPlayer` (Media3 `SimpleBasePlayer`) that the media session shows. `DjPlaybackHost`
+  in `MusicService` does the hand-over: save + `player.stop()` → `mediaSession.player = djPlayer`; on exit
+  the reverse plus `retryPendingQueuePlayback(savedPosition, resumePlayback = false)`.
+- **Fades:** equal-power, applied through each deck's player volume every 40 ms, with progress measured on
+  the incoming deck's media clock (pausing freezes a fade). Sample-accurate envelopes in the processor are
+  not needed for classic fades; they come with beatmatching (stage 9) if listening tests ask for them.
+- **Planner:** `ClassicFadePlanner` (dj-core): Smooth 8 s from the mixable outro, Radio 4 s, Chorus Hits 5 s
+  at the end of the song; "next" = 1.5 s fade. Song-length rules and the other techniques are stage 9.
+- **Deviation from the design:** the in-app DJ mini bar (§6) is deferred to stage 10 (live screen). The
+  mini player lives inside Metrolist's player sheet, which hides while Metrolist's player is stopped; the
+  DJ tab shows a "Now mixing" card with play/pause, next and End session, and the notification/lock
+  screen show the mix everywhere. `DjController` binds the music service (`awaitConnected()`) before
+  handing over, because Metrolist starts it lazily.
+- **Verified on the emulator:** start over a playing Metrolist song (one stream), next from the card and
+  from a media key (2 streams during the fade, 1 after), a simulated call (paused while ringing and in the
+  call, resumed after), End session (Metrolist back, paused on the previous song at its position, which
+  then plays normally), and playing a normal song during a mix (DJ ends first, one stream).
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.
