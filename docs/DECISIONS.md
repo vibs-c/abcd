@@ -17,12 +17,13 @@ Format: date · decision · alternatives considered · reason.
   source sets) are left untouched. `dj-core` stays free of Android imports so it can later become a
   KMP `commonMain` module for desktop/iOS.
 
-## 2026-11-16 · DJ entry point is a Home screen card, not a bottom-nav tab
+## 2026-11-16 · DJ entry point is a fourth bottom-nav tab
 
-- **Decision:** add a prominent "DJ" card on Home.
-- **Alternatives:** a sixth bottom-nav destination (`NavigationId`).
-- **Reason:** the bottom bar already holds up to five user-configurable tabs (Home, Library, History,
-  Stats, Listen Together). A sixth would crowd it (brief §4.1 fallback).
+- **Decision:** add a "DJ" tab to the Android bottom bar.
+- **Alternatives:** a card on Home (brief §4.1 fallback).
+- **Reason:** the Android bar shows only Home, Search and Library (each toggleable;
+  `Navigation.kt` `visibleNavigationItems()`), so a fourth tab does not crowd it. An earlier note here
+  wrongly counted five tabs; that list is the desktop sidebar (`desktopSidebarNavItems()`).
 
 ## 2026-11-16 · Rebrand keeps Kotlin namespaces
 
