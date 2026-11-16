@@ -46,8 +46,13 @@ stage 7 is design-only and waits for the owner's "Approved".
 ```powershell
 .\gradlew.bat :androidApp:assembleDebug          # debug APK
 .\gradlew.bat :androidApp:installDebug           # install on a connected phone
-.\gradlew.bat :dj-core:test                      # pure-Kotlin DJ unit tests (once the module exists)
+.\gradlew.bat :dj-core:jvmTest :dj-analysis:testDebugUnitTest   # DJ unit tests
+git submodule update --init                      # needed once: libopus, metroproto, Essentia, Eigen
 ```
+
+- Native analysis is tested on the emulator AVD `test` (x86_64): see `dj-native/README.md`. Use `adb` +
+  `am instrument`; `connectedDebugAndroidTest` wipes pushed test files. Never commit test audio.
+- `build/` reads are denied for me in `.claude/settings.json`; use PowerShell/adb output for results.
 
 - Debug APK: `androidApp/build/outputs/apk/debug/` (brief says `app/...`; here it is `androidApp/`).
 - Toolchain: JDK 25 (Adoptium, auto-provisioned by Gradle toolchains), Android SDK at
@@ -70,11 +75,11 @@ DJ modules (brief §10; package `com.aiqulabs.abcd.dj.<module>`):
 | Module | Type | Contents | Status |
 |---|---|---|---|
 | `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, later scoring/technique selection | Has code + tests |
-| `dj-native` | Android lib | C++ via CMake/NDK: analysis hot paths, effect DSP, JNI | Empty (stage 4) |
-| `dj-analysis` | Android lib | MediaCodec decode to PCM, `AudioAnalyzer` + native impl, pre-analysis | Empty (stages 4, 6) |
-| `dj-data` | Android lib | Separate Room DB `abcd_dj.db`, DAOs, repositories | Empty (stage 5) |
+| `dj-native` | Android lib | C++ via CMake/NDK: Essentia-based analysis, JNI; `core/` is portable C++ (no JNI/Android). See `dj-native/README.md` | Analysis done (effect DSP comes in stage 8) |
+| `dj-analysis` | Android lib | `MediaCodecPcmDecoder`, `NativeAudioAnalyzer`; pre-analysis service later | Decode + analyse done (pre-analysis in stage 6) |
+| `dj-data` | Android lib | Separate Room DB `abcd_dj.db`, DAOs, repositories | `DjSetupStore` only (Room in stage 5) |
 | `dj-engine` | Android lib | `DjMixEngine`, two decks, AudioProcessors, sync loop | Empty (stage 8) |
-| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Empty (stage 3) |
+| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup screen (stage 3) |
 
 **Host glue rule:** a library cannot depend on `androidApp`. Code that touches Metrolist internals
 (`PlayerConnection`, `AudioCacheManager`, `MusicService`, stream resolver) goes in new files under

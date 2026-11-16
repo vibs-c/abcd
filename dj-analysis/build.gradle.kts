@@ -1,5 +1,5 @@
-// dj-analysis: Decoding (MediaExtractor/MediaCodec to mono PCM), the AudioAnalyzer interface and its native implementation, the pre-analysis service. Filled in stages 4 and 6.
-// Android library. Kotlin is compiled by AGP's built-in Kotlin support, as in androidApp.
+// dj-analysis: decoding (MediaExtractor + MediaCodec to mono PCM), the native AudioAnalyzer, and later
+// the pre-analysis service (stage 6). The analyzer interfaces and result models are in dj-core.
 plugins {
     alias(libs.plugins.android.library)
 }
@@ -21,6 +21,9 @@ android {
 }
 
 dependencies {
-    implementation(project(":dj-core"))
+    api(project(":dj-core"))
     implementation(project(":dj-native"))
+    implementation(libs.kotlinx.coroutines.core)
+
+    testImplementation(libs.junit4)
 }

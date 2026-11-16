@@ -157,8 +157,10 @@ Discord button and lyrics-API referrers also point at Metrolist. See `docs/STAGE
 
 - **Decision:** `dj-core` uses `commonMain`, with a single JVM target that Android consumes.
 - **Alternatives:** a plain `kotlin("jvm")` module; or the Android KMP library plugin now.
-- **Reason:** `commonMain` forbids Android/JVM-only APIs by construction, which enforces the "no
-  Android imports" rule. Adding iOS/desktop later is one target line, no code move.
+- **Reason:** adding iOS/desktop later is one target line, no code move. Correction (stage 3/4 review):
+  with only a JVM target the compiler does *not* reject `java.*`/`android.*` in `commonMain`, so a
+  build check (`verifyPlatformFreeCommonMain` in `dj-core/build.gradle.kts`) enforces the "no Android
+  imports" rule on every compile until a second target exists.
 
 ## 2026-11-16 · Language filtering rejects only on strong evidence
 
@@ -167,6 +169,111 @@ Discord button and lyrics-API referrers also point at Metrolist. See `docs/STAGE
 - **Reason:** most Hindi/Punjabi film songs on YouTube Music have transliterated Latin titles, so a
   Latin title says nothing about language. Search queries ("hindi party songs") do most of the
   language targeting in v1; lyrics-based detection can refine it later.
+
+## 2026-11-16 · Stage 3 design choices
+
+- **Setup form is a `DjSetupDraft`, separate from `DjSessionSettings`.** First run has nothing
+  selected, so Start stays disabled until a language and a mood are chosen (all four inputs are
+  required, brief §4.2). `toSettings()` fills the v2 fields with their defaults.
+- **Remembered selection** lives in a private SharedPreferences file (`DjSetupStore` in `dj-data`),
+  not in Metrolist's `Settings` (no upstream edits) and not yet in `abcd_dj.db` (stage 5).
+- **`DjController` is an application-wide object** in `androidApp/.../dj/host`. A build keeps
+  running if the user switches tabs, and progress shows again on return. Cancelling returns to idle.
+- **Stage 3 hand-off:** the playlist plays through `PlayerConnection.playQueue(songs, finite = true,
+  shuffleModeEnabled = false)`, so Metrolist's own player, crossfade and queue are untouched. A mix
+  needs at least 5 playable songs, otherwise the screen says so instead of playing a tiny queue.
+- **Search is online-only for DJ:** `searchFiltered(..., allowOfflineFallback = false)`, so being
+  offline shows an error instead of a mix of whatever library songs match. Results respect the
+  user's blocked-content list.
+- **Known limits until stage 4:** the order is search order interleaved across queries (no BPM, key
+  or energy yet), and the mood only changes the search words. The mix "fits" as well as YouTube
+  Music's own search does.
+
+## 2026-11-17 · Stage 4: audio analysis in C++ with Essentia (no aubio fallback needed)
+
+- **Decision:** use Essentia (AGPL-3.0) for tempo/beat tracking (`RhythmExtractor2013`, multifeature)
+  and key (`KeyExtractor`), plus our own portable C++ for resampling, loudness, bars, structure and
+  chorus. 33 Essentia algorithms are compiled (of 283) with the bundled KissFFT.
+- **Build:** Essentia's own build (`waf`, an old Android toolchain recipe) was not used. A generator
+  script (`dj-native/scripts/generate_essentia_registry.py`) follows `AlgorithmFactory::create(...)`
+  references from our roots and writes the registry once; the output is committed, so building needs
+  only CMake and the NDK, no Python. The cross-compile worked first time with NDK r30. This also
+  answers the brief's "if Essentia is too painful, propose aubio": it was not.
+- **Dependencies added (tell the owner):** Essentia 2.1-beta6-dev, AGPL-3.0 (submodule, pinned
+  `23ae7ba`); Eigen 3.4.0, MPL-2.0, header-only (submodule, pinned `3147391`), which Essentia's
+  current core headers require; KissFFT, BSD-3-Clause, bundled in Essentia. The combined app is now
+  AGPL-3.0 (NOTICE.md, `LICENSES/AGPL-3.0.txt`).
+- **Portability (owner's request):** `core/` has no JNI or Android includes and exposes one C function
+  (`abcd_analyze_json`). Only `jni/abcd_jni.cpp` and the Gradle module are Android-specific. The
+  analyzer interface, result models and lyrics logic are in `dj-core` (platform-free Kotlin). Another
+  platform needs a `PcmDecoder` and to compile `core/` + the Essentia subset.
+- **Wire format = JSON string** (not packed arrays or Java object construction): one tiny JNI
+  function, debuggable by eye, and iOS/desktop can use the same C function. Cost is parsing about
+  50-100 KB of text per song, which is negligible next to the 7 s analysis.
+- **Analysis works at 44.1 kHz mono:** our own windowed-sinc resampler (any input rate), so
+  decoders on any platform can hand over their native rate.
+- **Loudness is an approximation:** BS.1770 K-weighted, gated, from the mono downmix (not a certified
+  stereo meter). Fine for matching two tracks the same way; absolute values can differ by 1-3 dB.
+- **Bars assume 4/4.** The tracker starts a few beats late, so the grid is extended back to 0:00 at
+  the same tempo. The downbeat is the beat phase with the most bass energy (kick/bass on beat 1);
+  confidence is the margin. It was 0.25 on the real song, so v1 should treat bar alignment as
+  unconfirmed when `downbeatConfidence` is low.
+- **Structure/chorus:** bar-level self-similarity (harmony + timbre + loudness), repeated stripes,
+  loud-and-repeated 8-bar core, occurrences found across the song, growth to 16 bars until a
+  structural boundary, at most 6 non-overlapping candidates. Lyrics are blended in later by
+  `ChorusRanker` (dj-core, tested); the host still has to fetch lyrics and call it (stage 6).
+  Confidence is lowered when the "chorus" covers over 60% of the song (loop-based music).
+- **ABIs:** arm64-v8a, armeabi-v7a (older 32-bit phones are common in the target market) and x86_64
+  (emulator). 64-bit libraries are 16 KB page aligned for new Android versions. Native code adds
+  about 0.7 MB to the APK (libraries are 1.1-1.8 MB each).
+- **How it was verified without a phone:** the Android emulator (x86_64, Android 17, 16 KB pages)
+  with a command-line build of the same code, and instrumentation tests for the full chain. See
+  `dj-native/README.md`.
+
+### Stage 4 results
+
+| Input | Truth | Result |
+|---|---|---|
+| Synthetic song (126 BPM, A minor, 3 choruses) | 126 BPM, A minor / 8A, choruses at 22.9, 53.3, 76.2 s (15.2 s long) | 126.00 BPM, A minor / 8A, choruses at exactly those times, intro/verse/bridge/outro correct, 2 s analysis |
+| "Shiny Tech", Kevin MacLeod, 3:42 MP3 (CC BY 3.0), decoded by MediaCodec | published tempo 138 BPM | 138.02 BPM (confidence 0.58), C minor (5A), 7.3 s analysis on the emulator; 5 chorus candidates of 16 bars, main at 1:41-2:09; structure confidence 0.35 because the track is one long loop |
+
+- **Limits, honestly:** two tracks are not a benchmark. Real-world accuracy on Bollywood and regional
+  songs (tempo changes, rubato) is untested; the owner will see it in the stage 5 Lab screen. Key
+  detection of minor vs relative major is a known weak spot. Chorus detection is weakest on
+  loop-based dance tracks, where the user's chorus editor (stage 11) is the fix.
+- **Speed:** 7 s for a 3.7-minute song on an emulator; a mid-range phone may be 2-4x slower, so
+  pre-analysing an 18-track mix could take a few minutes (stage 6 shows progress).
+
+## 2026-11-17 · Review of stages 3 and 4 (Opus)
+
+Checked every change against brief §4.1, §4.2, §5.2-5.5 and §7. Metrolist's player, service, queue,
+crossfade and `MusicDatabase` were **not** touched; the only upstream code edits are navigation
+(`Screen.kt`, `NavigationState.kt`, `Navigation.kt`, `MetrolistApp.kt`) and the string catalog.
+
+Fixed in the review:
+- **Hidden-tab regression:** the DJ tab was added before Metrolist's "if no tab is visible, show the
+  mysterious fourth tab" check, so that tab could never appear. DJ is now added after the check.
+- **Large-screen layout:** the DJ tab was missing from the sidebar list used on large screens.
+- **DJ screen insets:** content was drawn under the top bar and under the mini player (the Start
+  button could be hidden once music played). It now uses the same insets as Home and Library.
+- **dj-core portability:** the "no Android imports" rule was not actually enforced (see the dj-core
+  decision above); `verifyPlatformFreeCommonMain` now fails the build on any violation (tested).
+- **Native memory:** the song was copied about four times on its way into Essentia (about 64 MB per
+  copy for a 6-minute song). Now one copy; Essentia reads it in place. Same results, verified on the
+  emulator.
+- **Plurals:** "1 songs" in the status messages; now proper plural strings.
+
+Verified on the emulator after the fixes: all 4 instrumentation tests pass (138.02 BPM on the real
+track again); DJ tab, setup screen and "Start DJ" with Hindi + Punjabi, Party, Smooth, 30 min built
+a 14-song mix (11 + 3 spares) that started with a Hindi party song.
+
+Known gaps against the brief, not fixed now (planned):
+- §7.1 candidate sources: search and radio are used; **charts, mood/genre browse pages and the
+  user's library/liked songs are not yet**. Library songs need language tags first (a Latin-script
+  title says nothing about language), so they come with the database in stages 5-6.
+- §5.2 says resample in Kotlin; we resample in C++ so every platform's decoder can hand over its
+  native rate (documented above).
+- §5.5 lyrics signal: `ChorusRanker` exists and is tested but nothing fetches lyrics yet (stage 6).
 
 ## 2026-11-16 · DI is Koin
 

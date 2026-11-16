@@ -35,24 +35,36 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
   `dj-engine`, `dj-ui` created and wired into `androidApp`.
 - **Check:** the app builds and looks the same. Skim the new notes in `docs/DECISIONS.md`.
 
-## 3. DJ tab, setup screen and playlist · Sonnet · 🟡 (brief §4.1, §4.2, §7)
+## 3. DJ tab, setup screen and playlist · Sonnet · ✅ built, awaiting phone test (brief §4.1, §4.2, §7)
 
 - **Done** (`2bbc270`): `dj-core` session settings (v2 fields defaulted), languages, moods, mix styles,
   playlist sizing, candidate filtering, script-based language tags, playlist builder. Unit-tested.
-- **Remaining:** a fourth bottom-nav tab "DJ" (the Android bar has Home, Search, Library), the v1 setup
+- **Also done:** a fourth bottom-nav tab "DJ" (the Android bar has Home, Search, Library), the v1 setup
   screen (languages, mood, mix style, session length; all required; last selection remembered), an
   Android `CandidateSource` over Metrolist's existing search/radio (no new endpoints), and "Start DJ"
   playing the playlist through Metrolist's normal player.
 - **Check:** pick Hindi + Punjabi, Party, Smooth, 30 min, tap Start DJ. The songs fit the choice.
 
-## 4. C++ analysis engine · Opus · ⬜ (brief §5.2–5.5)
+## 4. C++ analysis engine · Opus · ✅ built, awaiting phone test (brief §5.2–5.5)
 
 - Build `dj-native` with the NDK and CMake. Cross-compile Essentia for Android (arm64-v8a first). If
   that is too painful on Windows, stop and propose the aubio fallback (§5.4) before switching. Expose
   `analyze()` through JNI behind the `AudioAnalyzer` interface. Analyse one downloaded song and show
   its BPM, key and chorus times. Add the AGPL-3.0 note to README/LICENSE if Essentia is linked.
+- **Done:** Essentia cross-compiled with the NDK (no aubio needed); portable `core/` + thin JNI;
+  `AudioAnalyzer`, `PcmDecoder`, `AnalysisResult` and `ChorusRanker` (lyrics) in `dj-core`;
+  `MediaCodecPcmDecoder` and `NativeAudioAnalyzer` in `dj-analysis`; arm64-v8a, armeabi-v7a, x86_64.
+  Verified on the emulator: 138.02 BPM on a real track with a published 138 BPM. Details and limits in
+  `docs/DECISIONS.md` ("Stage 4").
 - **Check:** BPM, key and chorus times are shown. The BPM is close to the published one (or exactly
-  half/double).
+  half/double). The phone has no analysis screen until stage 5 (Lab); stage 4's APK only proves the
+  native library installs and the app still works.
+
+## Review of stages 3-4 (Opus, 2026-11-17)
+
+Fixes and known gaps are in `docs/DECISIONS.md` ("Review of stages 3 and 4"). Carry-overs: add
+charts, mood/genre pages and library/liked songs as candidate sources (§7.1) once tracks have
+language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
 
 ## 5. Database and Lab screen · Sonnet · ⬜ (brief §6.1, §6.2, §4.5)
 

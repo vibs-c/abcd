@@ -4,3 +4,11 @@
 [submodule "opusDecoder/src/main/jni/libopus"]
 	path = opusDecoder/src/main/jni/libopus
 	url = https://github.com/xiph/opus.git
+[submodule "dj-native/third_party/essentia"]
+	path = dj-native/third_party/essentia
+	url = https://github.com/MTG/essentia.git
+	shallow = true
+[submodule "dj-native/third_party/eigen"]
+	path = dj-native/third_party/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+	shallow = true

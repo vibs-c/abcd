@@ -17,3 +17,7 @@ fastlane/
 *.m4a
 .claude/
 androidApp/src/main/assets/po_token.html
+
+# third-party native sources are not our code
+dj-native/third_party/
+dj-native/build/

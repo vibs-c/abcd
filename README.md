@@ -6,7 +6,7 @@ plays it as one continuous mix. It is aimed at house parties and road trips, Ind
 Android-only for now and is distributed as an APK.
 
 - Status: in development. See [`docs/STAGES.md`](docs/STAGES.md) for the build plan.
-- License: GPL-3.0, same as Metrolist. Credits and license notes are in [`NOTICE.md`](NOTICE.md).
+- License: Metrolist is GPL-3.0; abcd links Essentia (AGPL-3.0), so the combined app is AGPL-3.0. Credits and license notes are in [`NOTICE.md`](NOTICE.md).
 - Everything below this section is Metrolist's own README, kept for credit. All Metrolist features
   are still in abcd.
 
