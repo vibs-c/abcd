@@ -16,13 +16,15 @@ Status key: ✅ done · 🟡 partly done · ⬜ not started.
 
 ---
 
-## 1. Rebrand to abcd · Sonnet · 🟡 (brief §2.4)
+## 1. Rebrand to abcd · Sonnet · ✅ (brief §2.4)
 
-- **Done** (`c911084`): app name "abcd" (debug: "abcd Debug"), applicationId `in.aiqulabs.abcd`
-  (debug adds `.debug`), installs beside Metrolist.
-- **Remaining:** a simple placeholder launcher icon; README and LICENSE credits as §2 says (abcd is a
-  Metrolist fork under GPL-3.0, upstream credits kept; the AGPL-3.0 note is added in stage 4 once
-  Essentia is actually linked).
+- **Done:** app name "abcd" (debug: "abcd Debug"), applicationId `in.aiqulabs.abcd` (debug adds
+  `.debug`), installs beside Metrolist. Placeholder icon (white record on saffron) as the default
+  launcher icon. README gets an abcd section; credits and license notes in `NOTICE.md`. `LICENSE`
+  stays verbatim GPL-3.0 (its text may not be modified); the AGPL note is added in stage 4 if
+  Essentia is linked.
+- **Not changed:** Metrolist's alternative icons in the icon picker, the in-app Metrolist logo, the
+  TV banner. Replace them when there is a final abcd logo.
 - **Check:** an app called abcd, with its own icon, installs next to Metrolist and plays music as before.
 
 ## 2. Study the code and create the empty modules · Opus · 🟡 (brief §3, §10)

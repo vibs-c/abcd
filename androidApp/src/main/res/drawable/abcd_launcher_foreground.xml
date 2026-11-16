@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    abcd placeholder launcher foreground: a record with a tonearm, kept inside the 66dp adaptive-icon
+    safe zone (21..87). Also used as the monochrome (themed) layer.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Record: a ring from r=24 to r=9 around (52,56); the centre shows the background. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M28,56a24,24 0,1 0,48 0a24,24 0,1 0,-48 0z M43,56a9,9 0,1 0,18 0a9,9 0,1 0,-18 0z" />
+    <!-- Groove line. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFB066"
+        android:strokeWidth="1.5"
+        android:pathData="M36,56a16,16 0,1 0,32 0a16,16 0,1 0,-32 0z" />
+    <!-- Spindle. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,56a2,2 0,1 0,4 0a2,2 0,1 0,-4 0z" />
+    <!-- Tonearm: pivot at (80,28), arm down to the record edge. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3.5"
+        android:pathData="M80,28L80,46L68,56" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M76,28a4,4 0,1 0,8 0a4,4 0,1 0,-8 0z" />
+</vector>

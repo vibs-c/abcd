@@ -1,3 +1,17 @@
+# abcd (Anybody Can DJ)
+
+abcd is a fork of [Metrolist](https://github.com/MetrolistGroup/Metrolist) that adds a **DJ Mode**:
+pick languages, a mood, a mix style and a session length, and an automatic DJ builds a playlist and
+plays it as one continuous mix. It is aimed at house parties and road trips, India first. abcd is
+Android-only for now and is distributed as an APK.
+
+- Status: in development. See [`docs/STAGES.md`](docs/STAGES.md) for the build plan.
+- License: GPL-3.0, same as Metrolist. Credits and license notes are in [`NOTICE.md`](NOTICE.md).
+- Everything below this section is Metrolist's own README, kept for credit. All Metrolist features
+  are still in abcd.
+
+---
+
 <div style="display: flex; gap: 1rem;">
   <img src="fastlane/metadata/android/en-US/images/icon.png" alt="Metrolist app icon" width="200" height="200" />
   <div>
