@@ -49,7 +49,8 @@ internal class DjTrackPreparer(
     private suspend fun analyseFresh(track: DjTrack): TrackPreparation {
         val song = songFor(track.videoId) ?: return TrackPreparation.Failed("Unknown song")
         val started = System.nanoTime()
-        val result = decodeAndAnalyse(song)
+        // Synced lyrics (when Metrolist has them) re-rank the chorus candidates (brief §5.5).
+        val result = DjLyrics.rankChoruses(song, decodeAndAnalyse(song))
         repository.save(track.videoId, result, track)
         Timber.tag(TAG).d("%s analysed in %d ms", track.videoId, (System.nanoTime() - started) / 1_000_000)
         return TrackPreparation.Ready(result, alreadyKnown = false)

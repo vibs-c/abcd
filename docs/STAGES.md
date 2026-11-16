@@ -108,6 +108,31 @@ language tags (stages 5-6); wire lyrics into `ChorusRanker` (stage 6).
 - **8b/8c:** decoder safety net and Lab "Copy DJ log" (8b); code review of stages 1-8 with fixes (8c, see
   DECISIONS.md). APK `apk/abcd-stage-8c.apk`.
 
+## ⏸ Where we stopped (2026-11-17, end of day) — read this first next session
+
+- **Phone status:** 8c works on the owner's phone. Owner feedback: (1) every style mixes only at the very
+  end of the song, (2) the fade has an audible volume dip, (3) transitions must be subtle (unnoticeable).
+  Cause: stage 8's placeholder `ClassicFadePlanner` (end-of-song fades for all styles, plain equal-power
+  curve, no beat sync). These are stage 9's job; the owner asked NOT to build stage 9 yet.
+- **Parked stage-9 draft:** `git stash list` → `stash@{0}` "stage-9 draft (MixPlanner, CrossfadeCurve,
+  TransitionPlan speed/preRoll)". Per-style exit points, chorus-jump entry, tempo match, no-dip curve.
+  Not built or tested. Restore with `git stash apply stash@{0}` when stage 9 starts.
+- **In progress: ironing out stage 1-8 discrepancies** (owner's request). Audit result:
+  - DONE (this commit): synced lyrics now re-rank chorus candidates (`DjLyrics` + `ChorusRanker`,
+    brief §5.5; stage 6 carry-over) in session preparation and the Lab. Compiles; not yet tested.
+  - TODO: delete each session file once its track has played (stage 6 promise; 8c pinning keeps them
+    until the session ends): add `DjAudioProvider.unpin(id)` and call it on `TrackFinished`.
+  - TODO (design §7): keep the next TWO tracks' files ready (prefetch on `TrackStarted`).
+  - TODO (design §8): route pause-on-mute to the DJ engine; refuse DJ Mode during Device Connect; end DJ
+    Mode when cast or Listen Together connects; broadcast `ACTION_OPEN/CLOSE_AUDIO_EFFECT_CONTROL_SESSION`
+    for the decks' shared audio session (system EQ apps).
+  - TODO (docs): design doc §8 says the sleep timer "ends DJ Mode", code pauses the mix (keep pause, fix the
+    doc); design §6 mini bar is deferred to stage 10 (say so in the design doc); CLAUDE.md module statuses.
+  - NOT a discrepancy (planned later): TrackTag rows (§6.2, "written from stage 10"); charts and mood/genre
+    browse pages as candidate sources (§7.1; needs YouTube Music browse ids, plan for stage 9/10).
+- **Still to do after that:** write the plan for stages 9-12 (owner asked for analysis + plan, no code),
+  then rebuild, emulator-test, APK `apk/abcd-stage-8d.apk`, ask the owner before committing.
+
 ## 9. Beat-matching and chorus jumps · Opus · ⬜ (brief §9.2, §9.3)
 
 - v1 techniques (beatmatched blend, echo out, chorus jump; classic fade as fallback), the technique

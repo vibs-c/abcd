@@ -190,7 +190,7 @@ object DjLabController {
             mutableState.update { it.copy(message = LabMessage.NoAudioFile) }
             return
         }
-        runPipeline(context, videoId, song.title, artistNames(song), location, song.toDjTrack())
+        runPipeline(context, videoId, song.title, artistNames(song), location, song.toDjTrack(), song)
     }
 
     /** decode -> analyse -> save -> show. Shared by Metrolist's songs and picked files. */
@@ -201,6 +201,7 @@ object DjLabController {
         artists: String,
         location: String,
         track: DjTrack,
+        song: SongItem? = null,
     ) {
         val repository = repository(context)
         if (!location.contains("://") && !location.startsWith("file:")) {
@@ -227,7 +228,8 @@ object DjLabController {
                 )
                 analysed
             }
-        repository.save(videoId, result, track)
+        val ranked = if (song != null) DjLyrics.rankChoruses(song, result) else result
+        repository.save(videoId, ranked, track)
 
         val stored = checkNotNull(repository.load(videoId))
         mutableState.update { it.copy(busy = null, detail = LabDetail(videoId, title, artists, stored)) }
