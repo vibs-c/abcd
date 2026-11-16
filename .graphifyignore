@@ -1,0 +1,19 @@
+build/
+**/build/
+.gradle/
+.cxx/
+*.apk
+graphify-out/
+fastlane/
+
+# code only: no docs, images or media in the graph
+*.md
+*.txt
+*.png
+*.webp
+*.svg
+*.mp4
+*.webm
+*.m4a
+.claude/
+androidApp/src/main/assets/po_token.html
