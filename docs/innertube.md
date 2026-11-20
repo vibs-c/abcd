@@ -62,6 +62,10 @@ Providers advertise capabilities. Do not substitute a generic sidecar token for 
 
 A CDN 403 for an explicitly untokenized `_nopo` profile excludes that profile without discarding unrelated cached attestation. Tokenized or unidentified profiles invalidate attestation. Retain provider cooldowns, bounded mint deadlines and account/visitor validation.
 
+After a web-token rejection, audio requests try tokenless VISIONOS first. A failed probe continues through the normal clients. Video and YouTube canvas requests keep their video requirement and skip this audio-only preference.
+
+Android and desktop playback allow InnerTubeX's progressive transport, which iOS, downloads and canvas requests do not. `IOS_PRODUCER` needs no PO token, but YouTube only returns muxed 360p itag 18 for it, so selection tries it after every other healthy client. `PlaybackResource.isMuxedProgressive` keeps those files out of the persistent song caches, so a later play resolves a full-quality stream again.
+
 Token callbacks keep request-local results. A canceled Kotlin caller does not cancel a WebView promise; late results cannot overwrite another request. Check this with `node --test scripts/test_page_bound_po_token.mjs`.
 
 ## SABR

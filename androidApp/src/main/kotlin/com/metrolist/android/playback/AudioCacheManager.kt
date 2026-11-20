@@ -144,7 +144,8 @@ internal fun cacheableAudioResource(
     now: Instant = Clock.System.now(),
 ): PlaybackResource? =
     resource?.takeIf {
-        (it.isDirectFile || it.isSabr) && it.profileId != "cached-audio" && !it.url.startsWith("file:") &&
+        (it.isDirectFile || it.isSabr) && !it.isMuxedProgressive && it.profileId != "cached-audio" &&
+            !it.url.startsWith("file:") &&
             (it.expiresAt?.let { expiry -> expiry > now + 60.seconds } != false)
     }
 
