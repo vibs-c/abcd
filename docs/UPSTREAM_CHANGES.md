@@ -27,6 +27,6 @@ be merged later. New DJ code lives in the `dj-*` modules and is not listed here.
 | `opusDecoder/build.gradle.kts` | `opusAbis` adds `x86_64` only when `-Pabcd.opusX86=true` is passed; default ABIs unchanged | Test in-process Opus decoding for DJ analysis on the x86_64 emulator (stage 6c) |
 | `gradle/libs.versions.toml` | New alias `media3-extractor` (same Media3 version, already in the app through ExoPlayer) | `dj-analysis` reads WebM with Media3's Matroska extractor (stage 6c) |
 | `.gitmodules` | Two new submodules: `dj-native/third_party/essentia`, `dj-native/third_party/eigen` | Audio analysis libraries (stage 4) |
-| `README.md` | abcd section added at the top; Metrolist's README kept below | Credits (brief §2.2) |
+| `README.md` | Rewritten for abcd (what it does, how it works with a block diagram, modules, build, privacy); Metrolist credited under "License and credits" | Owner request after stage 10; credit kept (brief §2.2, GPL) |
 | `CLAUDE.md` | Replaced with the abcd agent guide | Brief §3.4 |
 | `.gitignore` | Ignore `graphify-out/` | Local code graph is not committed |

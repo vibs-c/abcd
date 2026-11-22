@@ -1,319 +1,163 @@
-# abcd (Anybody Can DJ)
+<div align="center">
 
-abcd is a fork of [Metrolist](https://github.com/MetrolistGroup/Metrolist) that adds a **DJ Mode**:
-pick languages, a mood, a mix style and a session length, and an automatic DJ builds a playlist and
-plays it as one continuous mix. It is aimed at house parties and road trips, India first. abcd is
-Android-only for now and is distributed as an APK.
+# abcd · Anybody Can DJ
 
-- Status: in development. See [`docs/STAGES.md`](docs/STAGES.md) for the build plan.
-- License: Metrolist is GPL-3.0; abcd links Essentia (AGPL-3.0), so the combined app is AGPL-3.0. Credits and license notes are in [`NOTICE.md`](NOTICE.md).
-- Everything below this section is Metrolist's own README, kept for credit. All Metrolist features
-  are still in abcd.
+**An automatic DJ for Android. Pick a vibe, press start, and abcd plays one continuous, beat-matched mix.**
+
+Built for house parties and road trips, India first: Hindi, English, Punjabi, Tamil, Telugu and more.
+
+</div>
 
 ---
 
-<div style="display: flex; gap: 1rem;">
-  <img src="fastlane/metadata/android/en-US/images/icon.png" alt="Metrolist app icon" width="200" height="200" />
-  <div>
-      <h1>Metrolist</h1>
-      <h3>A Material Design YouTube Music client for Android, iOS and desktop</h3>
-      <div style="display: flex; gap: 1rem;">
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases"><img src="https://img.shields.io/github/v/release/MetrolistGroup/Metrolist?style=for-the-badge&labelColor=0d1117" alt="Latest release" /></a>
-        <a href="https://github.com/MetrolistGroup/Metrolist/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MetrolistGroup/metrolist?style=for-the-badge&labelColor=0d1117" alt="License" /></a>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases"><img src="https://img.shields.io/github/downloads/MetrolistGroup/Metrolist/total?style=for-the-badge&labelColor=0d1117" alt="Downloads" /></a>
-      </div>
-  </div>
-</div>
+## What it does
 
-<br>
+1. **You choose** one or more languages, a mood (Party, Chill, Romantic, Road Trip, Workout, Sad,
+   Retro, Devotional, Wedding/Sangeet), a mix style and how long the mix should run.
+2. **abcd picks the songs** from YouTube Music: searches for your languages and mood, "up next" radio
+   from the best picks, YouTube Music's own mood page, and your liked and library songs.
+3. **abcd listens to every song before it plays.** On the phone, it finds the tempo (BPM), the beat
+   grid, the musical key, loudness, the song's sections and its chorus.
+4. **abcd orders the set** so that tempo, key and energy flow, following an energy arc that suits the mood.
+5. **abcd mixes it live** on two decks: it lines up the beats, matches the tempo without changing the
+   pitch, and blends one song into the next at the right moment.
 
-<div style="display: flex; gap: 0.5rem; align-items: center;">
-  <a href="https://www.blacksmith.sh"><img src="assets/blacksmith-powered.svg" alt="CI powered by Blacksmith" height="32" /></a>
-  <a href="https://dsc.gg/metrolist"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" height="32" /></a>
-  <a href="https://t.me/metrolistapp"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram" height="32" /></a>
-</div>
+### Mix styles
 
-<br>
+| Style | What you hear |
+|---|---|
+| **Smooth** | Long blends. Each song plays until after its last chorus. |
+| **Radio** | Songs play almost to the end, then mix into the next one. |
+| **Chorus Hits** | A fast mix: each song plays its main chorus, then jumps to the next song's chorus. |
 
-> [!WARNING]
-> <details>
->   <summary>The use of Metrolist to access YouTube Music may violate YouTube's Terms of Service.</summary>
->   <p>You use Metrolist at your own risk. You are solely responsible for any consequences. Metrolist's contributors are not liable for damages, claims or actions against your account. We have received no reports of bans or restrictions for using Metrolist, but that does not guarantee your account's safety.</p>
-> </details>
->
-> YouTube Music is region-restricted. If the service is unavailable in your region, you need a [VPN or proxy in a supported region](https://one.one.one.one/) to use the app. [Changing your DNS](https://developers.cloudflare.com/1.1.1.1/setup/) can bypass some blocks.
+### Transitions
 
-<!---
+| Technique | When abcd uses it |
+|---|---|
+| **Beat-matched blend** | Both songs have a clear beat and their tempos are within about 6% (half- or double-time counts). The incoming song is time-stretched, phase-locked to the beat and faded in over 8 to 16 bars. The blend is shorter when the keys clash. |
+| **Echo out** | The tempos are too far apart to blend. The outgoing song echoes out on the beat and the next song drops in on its downbeat. |
+| **Classic fade** | Neither of the above is possible, for example when there is no usable beat grid. |
 
-DO NOT REMOVE THIS SECTION, I WANT TO ADD IT LATER!!!
+### While the mix plays
+
+- Now playing and up next, with artwork, on the **live screen** and in a **mini bar** on every tab.
+- **Thumbs up / down** on the transition that just happened.
+- **Edit the queue:** move songs up or down, remove a song, or mark it "never play".
+- Play/pause, Next and End session, including from the notification and the lock screen.
+- **abcd learns from you.** Banned songs never come back, songs you often remove or skip sink, and
+  song pairs and transition styles you liked are chosen more often. Everything stays on your phone.
+
 ---
-<div align="center">
 
-<h1><a id="screenshots"></a>Screenshots</h1>
+## How it works
 
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_1.png" alt="Home screen" width="30%" />
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_2.png" alt="Artist screen" width="30%" />
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_3.png" alt="Recognize music screen" width="30%" />
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_4.png" alt="Listen together screen" width="30%" />
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_5.png" alt="Player screen" width="30%" />
-<img src="fastlane/metadata/android/en-US/images/screenshots/screenshot_6.png" alt="Player lyrics screen" width="30%" />
+```mermaid
+flowchart TD
+    A["Setup screen<br/>languages · mood · style · length"] --> B
 
-</div>
--->
+    subgraph BRAIN["DJ brain (dj-core, pure Kotlin)"]
+        B["Playlist builder<br/>search · radio · mood page · your library<br/>language filter"]
+        F["Orderer<br/>tempo · key · energy arc · your feedback"]
+        G["Mix planner<br/>mix points per style · technique choice"]
+    end
 
-<div align="center">
-<h1>Features</h1>
-</div>
+    subgraph PREP["Preparation (dj-analysis + dj-native)"]
+        C["Get the audio<br/>download, then decode in-app (Opus)"]
+        D["Native analysis (C++ / Essentia)<br/>BPM · beat grid · key · loudness<br/>sections · chorus (+ synced lyrics)"]
+    end
 
-- YouTube Music playback with or without signing in
-- Android 7+, iOS 17+, Windows 10+, macOS 15+ and Linux support
-- Material 3 Expressive design
-- Discord Rich Presence and scrobbling through Last.fm and ListenBrainz
-- No ads
-- Listen Together for shared playback online
-- Casting to Google Cast, F-Cast and SONOS devices, and over DLNA (Android and desktop)
-- Backup and playlist imports from 30+ clients and 6 services
-- Music recognition through Shazam
-- Lyrics with translation and romanization
-- Translations in over 15 languages
-- Video playback (Android and desktop)
-- Content filters for AI-generated content, explicit-only playback and SFW-only playback
-- Canvas from Apple Music, Spotify and YouTube Music
-- Player, thumbnail, miniplayer and background styles
-- Custom fonts and app icons
+    DB[("abcd_dj.db (dj-data)<br/>analysis · chorus · tags<br/>feedback · sessions")]
 
-> [!TIP]
-> <p>See the <a href="https://metrolist.cc/#faq">FAQ</a> for common questions.</p>
+    subgraph ENGINE["Two-deck engine (dj-engine)"]
+        H["Deck A + Deck B<br/>ExoPlayer"]
+        I["Tempo match · phase lock<br/>echo (C++) · crossfade · limiter"]
+    end
 
-<br>
+    UI["Live screen · mini bar (dj-ui)<br/>thumbs · queue edits"]
+    OUT["Media session<br/>notification · lock screen · Android Auto"]
 
-<div align="center">
-
-<h1><a id="download-now"></a>Download now</h1>
-
-<p>Install Metrolist: <a href="docs/install/android.md">Android</a>, <a href="docs/install/ios.md">iOS</a>, <a href="docs/install/windows.md">Windows</a>, <a href="docs/install/macos.md">macOS</a> or <a href="docs/install/linux.md">Linux</a>. Check <a href="docs/install/README.md#get-the-package">download availability</a> before choosing a package.</p>
-
-<p>
-  <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest">Choose a release for your device</a>
-</p>
-
-<table>
-  <tr>
-    <td align="center" valign="top" width="33%">
-      <h2>Windows</h2>
-      <p>Windows 10+ · pick your chip</p>
-      <p><sub>x64 · installer and portable</sub></p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest">
-          <img alt="Download the Windows installer (.exe)" src="assets/badges/platform/windows-installer.svg">
-        </a>
-      </p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest/download/Metrolist-Desktop-windows.zip"><img alt="Download the portable Windows x64 package (.zip)" src="assets/badges/platform/windows-portable.svg"></a>
-      </p>
-      <p><sub>ARM64 · portable only</sub></p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest"><img alt="Download the portable Windows ARM64 package (.zip)" src="assets/badges/platform/windows-portable.svg"></a>
-      </p>
-    </td>
-    <td align="center" valign="top" width="33%">
-      <h2>macOS</h2>
-      <p>macOS 15+ · pick your chip</p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest">
-          <img alt="Download Metrolist for macOS on Apple silicon (.dmg)" src="assets/badges/platform/macos-apple-silicon.svg">
-        </a>
-      </p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest">
-          <img alt="Download Metrolist for macOS on Intel (.dmg)" src="assets/badges/platform/macos-intel.svg">
-        </a>
-      </p>
-      <p><sub>Unsigned app, you need to trust it first</sub></p>
-      <p><sub>Or install with <a href="docs/install/macos.md#homebrew">Homebrew</a></sub></p>
-    </td>
-    <td align="center" valign="top" width="33%">
-      <h2>iOS</h2>
-      <p>iPhone &amp; iPad · iOS 17+</p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest/download/Metrolist.ipa">
-          <img alt="Download the iOS IPA package" src="assets/badges/platform/ios-ipa.svg">
-        </a>
-      </p>
-      <p><sub>AltStore, SideStore, TrollStore or Sideloadly</sub></p>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="33%">
-      <h2>Android</h2>
-      <p>Android 7+</p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest/download/Metrolist.apk">
-          <img alt="Download the stable Android APK" src="assets/badges/platform/android-stable.svg">
-        </a>
-      </p>
-    </td>
-    <td align="center" valign="top" width="33%">
-      <h2>Linux</h2>
-      <p>glibc · pick your chip</p>
-      <p><sub>x86_64 · AppImage or packages</sub></p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest"><img alt="Download the x86_64 Linux AppImage" src="assets/badges/platform/linux-appimage.svg"></a>
-      </p>
-      <p>
-        <a href="https://aur.archlinux.org/packages/metrolist-desktop-bin"><img alt="Get the AUR PKGBUILD for Metrolist" src="assets/badges/platform/linux-aur.svg"></a>
-      </p>
-      <p>
-        <a href="docs/install/linux.md#nix"><img alt="Get the Nix flake" src="assets/badges/platform/linux-nix.svg"></a>
-      </p>
-      <p><sub>ARM64 · AppImage or Nix</sub></p>
-      <p>
-        <a href="https://github.com/MetrolistGroup/Metrolist/releases/latest"><img alt="Download the ARM64 Linux AppImage" src="assets/badges/platform/linux-appimage.svg"></a>
-      </p>
-      <p>
-        <a href="docs/install/linux.md#nix"><img alt="Get the Nix flake" src="assets/badges/platform/linux-nix.svg"></a>
-      </p>
-      <p><sub>Or install with <a href="docs/install/linux.md#homebrew">Homebrew</a></sub></p>
-    </td>
-    <td align="center" valign="top" width="33%">
-      <h2>Android stores</h2>
-      <p>The app already has a built-in updater.</p>
-      <p>
-        <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/MetrolistGroup/Metrolist/">
-          <img alt="Add the Metrolist repository to Obtainium" src="assets/badges/platform/store-obtainium.svg">
-        </a>
-      </p>
-      <p>
-        <a href="https://apt.izzysoft.de/fdroid/index/apk/com.metrolist.music">
-          <img alt="Find Metrolist in the IzzyOnDroid F-Droid repository" src="assets/badges/platform/store-izzyondroid.svg">
-        </a>
-      </p>
-      <p>
-        <a href="https://www.openapk.net/metrolist/com.metrolist.music/">
-          <img alt="Find the Metrolist APK on OpenAPK" src="assets/badges/platform/store-openapk.svg">
-        </a>
-      </p>
-    </td>
-  </tr>
-</table>
-
-</div>
-
-<br>
-
-<div align="center">
-
-<h1><a id="support-the-project"></a>Support the project</h1>
-
-Metrolist is free and open-source. Donations support its development.
-
-<p>
-  <a href="https://github.com/sponsors/nyxiereal">
-    <img src="https://img.shields.io/badge/Sponsor-nyxiereal-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor nyxiereal" />
-  </a>
-  <a href="https://www.buymeacoffee.com/mostafaalagamy">
-    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-mostafaalagamy-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" />
-  </a>
-  <a href="https://github.com/sponsors/l6t9">
-    <img src="https://img.shields.io/badge/Sponsor-l6t9-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor l6t9" />
-  </a>
-  <a href="https://github.com/sponsors/adrielggmotion">
-    <img src="https://img.shields.io/badge/Sponsor-adrielggmotion-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor adrielggmotion" />
-  </a>
-</p>
-
-<details>
-  <summary>Donate Monero to Mostafa Alagamy</summary>
-  <p>
-    <img src="assets/XMR.png" alt="Monero QR code" width="150" />
-  </p>
-
-```text
-44XjSELSWcgJTZiCKzjpCQWyXhokrH9RqH3rpp35FkSKi57T25hniHWHQNhLeXyFn3DDYqufmfRB1iEtENerZpJc7xJCcqt
+    B --> C --> D --> DB
+    DB --> F --> G --> H --> I --> OUT
+    I --> UI
+    UI -- "thumbs, skips, removals" --> DB
+    DB -. "analysed once, reused" .-> C
 ```
 
-</details>
-</div>
+**Step by step**
 
-<br>
+1. **Build.** The playlist builder asks YouTube Music for candidates and keeps only songs that match your
+   languages. It uses script detection (Devanagari, Gurmukhi, Tamil and more), Hindi and Punjabi words in
+   Latin-script titles, and artist hints. It drops podcasts, very long tracks and banned songs.
+2. **Prepare.** Every song is analysed **before** it plays. The audio is decoded in-app and passed to a
+   native C++ analyser built on [Essentia](https://essentia.upf.edu/). Results are saved in abcd's own
+   database, so a song is analysed only once. Your second mix starts much faster than your first.
+3. **Order.** Songs are ordered by tempo compatibility, Camelot-wheel key compatibility and how well
+   their energy fits the arc for your mood (for example, Party builds up). Your past feedback nudges
+   the order.
+4. **Plan each transition.** For each pair of songs, the mix planner picks where to leave the playing
+   song and where to enter the next one (on a bar line, around choruses for Chorus Hits), then picks a
+   technique and its length.
+5. **Play.** Two decks play at once. The incoming deck is cued silently at the matched tempo and
+   continuously nudged until its beats line up with the playing deck, usually within a few
+   milliseconds. Then a constant-power crossfade with a little headroom and a limiter makes the
+   change hard to hear.
 
-<div align="center">
+### Project layout
 
-<h1>Special thanks</h1>
+| Module | What it holds |
+|---|---|
+| `dj-core` | Pure Kotlin, no Android: session settings, playlist builder, language and mood tagging, ordering and scoring, mix planner, feedback logic. Unit-tested on the JVM. |
+| `dj-native` | C++ (NDK + CMake): Essentia-based analysis, echo effect, JNI bindings. |
+| `dj-analysis` | Android audio decoding (in-app Opus decoder or MediaCodec) and the analysis pipeline. |
+| `dj-data` | The DJ's own Room database `abcd_dj.db`: analyses, sections, chorus segments, tags, feedback, sessions. |
+| `dj-engine` | The two-deck mixing engine on Media3 ExoPlayer, its audio processors and media-session player. |
+| `dj-ui` | Jetpack Compose screens: setup, preparing, live screen, mini bar, Lab (developer tools). |
+| `androidApp`, `shared` | The music app abcd is built on: YouTube Music access, player, library, downloads and settings. |
 
-Metrolist uses these projects and services.
+Design notes live in [`docs/`](docs/): the product brief ([`ABCD_rev2.md`](docs/ABCD_rev2.md)), the
+engine design ([`DJ_ENGINE_DESIGN.md`](docs/DJ_ENGINE_DESIGN.md)), the build plan
+([`STAGES.md`](docs/STAGES.md)) and the decision log ([`DECISIONS.md`](docs/DECISIONS.md)).
 
-<table>
-  <thead>
-    <tr>
-      <th align="center">Project</th>
-      <th align="center">Contribution</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td align="center"><a href="https://github.com/aleksey-saenko/MusicRecognizer">MusicRecognizer</a></td>
-      <td>Music recognition through the Shazam API</td>
-    </tr>
-    <tr>
-      <td align="center"><a href="https://github.com/MetrolistGroup/innertubex">InnerTubeX</a></td>
-      <td>YouTube streaming engine, developed with help from <a href="https://github.com/ZemerTeam/">ZemerTeam</a></td>
-    </tr>
-    <tr>
-      <td align="center">Lyprio</td>
-      <td>Lyrics provider</td>
-    </tr>
-    <tr>
-      <td align="center"><a href="https://github.com/MetrolistGroup/metroserver">metroserver</a></td>
-      <td>Listen Together real-time synchronization backend</td>
-    </tr>
-    <tr>
-      <td align="center"><a href="https://www.blacksmith.sh">Blacksmith</a></td>
-      <td>GitHub Actions runners for CI</td>
-    </tr>
-  </tbody>
-</table>
-</div>
+---
 
-<br>
+## Status
 
-<div align="center">
+abcd is **in development**, Android only, and distributed as an APK. Stages 1 to 10 of the 12-stage
+plan are built: analysis, the two-deck engine, beat-matched and echo transitions, the live screen and
+learning from feedback. Next come a chorus editor and final polish. See [`docs/STAGES.md`](docs/STAGES.md).
 
-<h1><a id="translations"></a>Translations</h1>
+## Build it yourself
 
-[![Translation status](https://img.shields.io/weblate/progress/metrolist?style=for-the-badge&labelColor=0d1117)](https://hosted.weblate.org/engage/metrolist/)
+Requirements: Android Studio (JDK from Gradle toolchains), Android SDK, NDK `30.0.16248370` and CMake `4.1.2`.
 
-<p>We use Weblate to translate Metrolist. <a href="https://hosted.weblate.org/projects/Metrolist/">Contribute a translation</a>.</p>
+```bash
+git clone https://github.com/vibs-c/abcd.git
+cd abcd
+git submodule update --init          # libopus, Essentia, Eigen and other native sources
+./gradlew :androidApp:assembleDebug  # APK in androidApp/build/outputs/apk/debug/
+./gradlew :dj-core:jvmTest           # DJ brain unit tests
+```
 
-<a href="https://hosted.weblate.org/projects/Metrolist/">
-  <img src="https://hosted.weblate.org/widget/Metrolist/horizontal-auto.svg" alt="Translation status" />
-</a>
-</div>
+On Windows, use `.\gradlew.bat`. For the x86_64 emulator, add `-Pabcd.opusX86=true` so the in-app Opus
+decoder is built for it too.
 
-<br>
+## Privacy
 
-<div align="center">
-<h1>Contributors</h1>
-<p>To contribute code, start with the <a href="docs/README.md">developer docs</a>.</p>
-<a href="https://github.com/MetrolistGroup/Metrolist/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=MetrolistGroup/Metrolist" alt="Contributors" />
-</a>
-</div>
+- No analytics and no telemetry in DJ Mode. Analysis results, tags and feedback stay in a database on
+  your phone.
+- abcd talks to YouTube Music the same way the underlying app already does. DJ Mode adds no new servers
+  or endpoints.
 
-<br>
+## License and credits
+
+abcd is licensed under the **GNU AGPL-3.0** because it links [Essentia](https://essentia.upf.edu/)
+(AGPL-3.0). See [`LICENSE`](LICENSE), [`LICENSES/`](LICENSES/) and [`NOTICE.md`](NOTICE.md) for the full
+notices.
+
+abcd is built on [Metrolist](https://github.com/MetrolistGroup/Metrolist) (GPL-3.0), an open-source
+YouTube Music client, with thanks to its developers.
 
 > [!WARNING]
-> <h2>Legal disclaimer</h2>
-> <p>This project is not affiliated with, funded, authorized or endorsed by YouTube, Google LLC, MetroList MLS, or their affiliates and subsidiaries.</p>
->
-> <p>All trademarks, service marks, and intellectual property rights referenced in this project belong to their respective owners.</p>
-
-<br/>
-
-<div align="center">
-
-**Developed by [the Metrolist development team](https://github.com/MetrolistGroup)**
-
-**This project stands with Palestine 🇵🇸**
-
-</div>
+> abcd is not affiliated with, funded, authorized or endorsed by YouTube or Google LLC. Using a
+> third-party client to access YouTube Music may violate YouTube's Terms of Service; you use abcd at your
+> own risk. All trademarks belong to their respective owners.
