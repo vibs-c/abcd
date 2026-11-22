@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
+import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
 import com.aiqulabs.abcd.dj.engine.DjEngineEvent
 import com.aiqulabs.abcd.dj.engine.DjMixEngine
@@ -64,6 +65,7 @@ internal class DjPlaybackHost(
     private var savedPositionMs: Long? = null
     private var songs: Map<String, SongItem> = emptyMap()
     private val files = HashMap<String, DjAudioFile>()
+    private var order: List<DjTrack> = emptyList()
 
     /** True from [enter] until an exit starts; the guard in MusicService ends DJ Mode while this is true. */
     val isActive: Boolean get() = engine != null
@@ -116,6 +118,7 @@ internal class DjPlaybackHost(
         isEntering = true
         try {
             this.songs = songs
+            order = tracks.map { it.track }
             DjAudioProvider.get(context).pin(nextIds)
             // Metrolist is already stopped when one mix replaces another; keep the position from before the first.
             savedPositionMs = ops.stopNormalPlayback() ?: earlierPosition
@@ -179,6 +182,7 @@ internal class DjPlaybackHost(
         savedPositionMs = null
         files.clear()
         songs = emptyMap()
+        order = emptyList()
         return leftovers
     }
 
@@ -213,7 +217,13 @@ internal class DjPlaybackHost(
                 scope.launch {
                     engine.events.collect { event ->
                         when (event) {
-                            is DjEngineEvent.TrackFinished -> files.remove(event.track.videoId)?.release()
+                            is DjEngineEvent.TrackFinished -> {
+                                // Played: unpin and delete (abcd's own downloads only; Metrolist's files are never touched).
+                                DjAudioProvider.get(context).unpin(event.track.videoId)
+                                files.remove(event.track.videoId)?.release()
+                            }
+
+                            is DjEngineEvent.TrackStarted -> prefetchAfter(event.track.videoId)
                             is DjEngineEvent.SessionFinished -> exit(fadeOutMs = 0L)
                             is DjEngineEvent.TransitionStarted -> Timber.tag(TAG).d("Mixing into %s: %s", event.to.title, event.plan.reason)
                             is DjEngineEvent.TrackSkipped -> Timber.tag(TAG).w("Skipped %s: %s", event.track.title, event.reason)
@@ -224,6 +234,18 @@ internal class DjPlaybackHost(
             )
     }
 
+    /**
+     * Keeps the files of the next [PREFETCH_TRACKS] tracks ready (design §7). The engine loads only the very
+     * next one; a file Android removed from the cache is downloaded again here, well before it is needed.
+     */
+    private fun prefetchAfter(videoId: String) {
+        val position = order.indexOfFirst { it.videoId == videoId }
+        if (position < 0) return
+        order.drop(position + 1).take(PREFETCH_TRACKS).forEach { track ->
+            if (track.videoId !in files) scope.launch { source.open(track) }
+        }
+    }
+
     private fun stopObserving() {
         observers.forEach { it.cancel() }
         observers = emptyList()
@@ -231,5 +253,6 @@ internal class DjPlaybackHost(
 
     private companion object {
         const val TAG = "DjPlaybackHost"
+        const val PREFETCH_TRACKS = 2
     }
 }

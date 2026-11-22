@@ -149,7 +149,7 @@ Triggers: "End session", notification stop, the mix runs out, the user starts no
 |---|---|
 | Notification, lock screen, headset/Bluetooth buttons, Wear | Via `DjSessionPlayer` (session swap). Next = mix to the next track now. |
 | Android Auto | Shows the DJ mix and its queue. Picking any other item ends DJ Mode, then plays it (§5.2). |
-| In-app mini player | `PlayerConnection` gains `djSession: StateFlow<DjSessionUi?>`; while non-null the mini-player slot shows the DJ mini bar from `dj-ui` (now playing, play/pause, opens the live screen). |
+| In-app mini player | **Deferred to stage 10** (as built in stage 8): Metrolist's mini player lives in its player sheet, which hides while its player is stopped. Stage 8 shows a "Now mixing" card on the DJ tab; the notification and lock screen show the mix everywhere. Stage 10 adds the DJ mini bar via `DjPlayback.state` (no `PlayerConnection` change needed). |
 | Metrolist's full player screen | Not opened while DJ is on; the DJ tab shows the live screen (stage 10). |
 | Starting any song in the app | Ends DJ Mode first (guard), then plays normally. |
 
@@ -178,7 +178,7 @@ rather than stalling the mix. Played files are deleted as the mix goes.
 | App swiped away (task removed) | Playing: the mix continues (like Metrolist). Paused: DJ Mode ends and the service may stop. |
 | Process killed | The DJ session is not restored in v1; Metrolist's saved state (from §5.1 step 2) is. |
 | Call or backgrounding **during the hand-over** | Hand-over steps are synchronous on the main thread, so focus and lifecycle callbacks arrive after it completes and are handled in the new state. Starting during a call → `waiting-for-focus`. |
-| Sleep timer | While DJ is on, the timer ends the DJ session with a fade (adapter over the engine). |
+| Sleep timer | While DJ is on, the timer **pauses the mix** (as built: same as Metrolist's own sleep timer, which pauses). |
 | Pause on mute | Routed to the engine's pause/resume while DJ is on. |
 | Listening history, scrobbling, Discord, widgets | v1: not updated by DJ plays (they observe Metrolist's player). Hook point reserved; decide in stage 10. |
 | Cast, Listen Together, Device Connect | Refused at DJ start; connecting while DJ is on ends DJ Mode first. |
@@ -192,7 +192,7 @@ No changes to `ExoPlaybackPlayer`, `AndroidQueueTransitions`, `MediaSessionPlaye
 
 | File | Change (small, additive) |
 |---|---|
-| `playback/MusicService.kt` | Create `DjPlaybackHost` with access to `player`, `mediaSession`, `media3Player`, `savePlaybackState`. Call `djHost.ensureNormalPlayback()` in the Metrolist play entry points (`PlayerConnection`-facing play/queue calls, `AutomotiveSessionCallback.onSetMediaItems/onAddMediaItems/onPlaybackResumption`, cast/Listen Together connect). End DJ in `onDestroy`/`onTaskRemoved` (paused). Sleep timer and pause-on-mute routed to the engine while DJ is on. |
+| `playback/MusicService.kt` | Create `DjPlaybackHost` with access to `player`, `mediaSession`, `media3Player`, `savePlaybackState`. One guard instead of per-entry-point calls (as built): an observer on `player.wantsPlaybackState` ends DJ Mode whenever Metrolist's player is asked to play; Android Auto requests reach `DjSessionPlayer.handleSetMediaItems`, which ends DJ Mode and forwards them; cast/Listen Together connecting ends DJ Mode. End DJ in `onDestroy`/`onTaskRemoved` (paused). Sleep timer and pause-on-mute routed to the engine while DJ is on. |
 | `playback/PlayerConnection.kt` | Expose `djSession` and the DJ commands to the UI; normal play calls go through the guard. |
 | `ui/MetrolistApp.kt` (mini-player slot, ~line 1813) | Show the DJ mini bar while `djSession` is non-null. |
 | `dj/host/DjController.kt` (ours) | Hand the prepared mix to `DjPlaybackHost` instead of `playerConnection.playQueue`. |

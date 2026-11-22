@@ -651,6 +651,17 @@ class MusicService :
         val muted =
             audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) == 0 ||
                 audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        // abcd DJ Mode: while a mix plays, pause-on-mute pauses and resumes the mix (design §8).
+        if (::djHost.isInitialized && djHost.isActive) {
+            pauseOnMute.onVolumeChanged(
+                muted = muted,
+                enabled = Settings.shared.pauseOnMute,
+                playing = DjPlayback.state.value?.playWhenReady == true,
+                pause = { djHost.pause() },
+                resume = { djHost.play() },
+            )
+            return
+        }
         pauseOnMute.onVolumeChanged(
             muted = muted,
             enabled = Settings.shared.pauseOnMute,
@@ -899,7 +910,9 @@ class MusicService :
                 ops =
                     object : DjPlaybackHost.Ops {
                         override fun canStartDj(): Boolean =
-                            !castManager.state.value.isConnected && !AndroidListenTogetherManager.isGuestPlaybackLocked
+                            !castManager.state.value.isConnected &&
+                                !AndroidListenTogetherManager.isGuestPlaybackLocked &&
+                                !AndroidDeviceConnect.manager.remote.isFollowing
 
                         override fun stopNormalPlayback(): Long? {
                             val position = player.currentPosition.value.takeIf { player.currentSong.value != null }
@@ -935,6 +948,15 @@ class MusicService :
             player.wantsPlaybackState.collect { wants ->
                 if (wants && djHost.isActive && !djHost.isEntering) djHost.exit(fadeOutMs = 0L, restoreNormal = false)
             }
+        }
+        // Casting or joining Listen Together hands playback to Metrolist's remote paths: end DJ Mode first.
+        serviceScope.launch {
+            combine(
+                castManager.state.map { it.isConnected },
+                AndroidListenTogetherManager.isGuestPlaybackLockedFlow,
+            ) { casting, guest -> casting || guest }
+                .distinctUntilChanged()
+                .collect { remote -> if (remote && djHost.isActive) djHost.exit(fadeOutMs = 0L, restoreNormal = false) }
         }
     }
 

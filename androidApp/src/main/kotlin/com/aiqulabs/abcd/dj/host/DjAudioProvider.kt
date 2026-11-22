@@ -98,6 +98,11 @@ internal class DjAudioProvider private constructor(
         pinned = videoIds.mapTo(HashSet()) { fileFor(it).name }
     }
 
+    /** The track of [videoId] has played: its file may go (stage 6: files are kept only until played). */
+    fun unpin(videoId: String) {
+        pinned = pinned - fileFor(videoId).name
+    }
+
     private fun isPinned(file: File): Boolean = file.name in pinned
 
     private suspend fun download(

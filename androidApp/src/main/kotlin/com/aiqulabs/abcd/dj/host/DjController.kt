@@ -44,6 +44,10 @@ object DjController {
 
     val state: StateFlow<DjStartState> = mutableState.asStateFlow()
 
+    /** True while a mix is being built or prepared (library analysis waits for it). */
+    internal val isPreparing: Boolean
+        get() = mutableState.value.let { it is DjStartState.Building || it is DjStartState.Preparing }
+
     /** Starts building, preparing and playing a mix. Ignored while one is already running. */
     fun start(
         context: Context,

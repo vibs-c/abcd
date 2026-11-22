@@ -1,7 +1,9 @@
 package com.aiqulabs.abcd.dj.engine
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
+import android.media.audiofx.AudioEffect
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.PlaybackException
@@ -70,6 +72,7 @@ class ExoDjMixEngine(
     private var pendingQueue: List<String>? = null
     private var ending = false
     private var released = false
+    private var audioSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
 
     private val deckListener: Deck.Listener =
         object : Deck.Listener {
@@ -131,6 +134,8 @@ class ExoDjMixEngine(
             return
         }
         val audioSessionId = appContext.getSystemService(AudioManager::class.java).generateAudioSessionId()
+        this.audioSessionId = audioSessionId
+        announceEffectSession(open = true)
         decks = arrayOf(Deck(appContext, "A", audioSessionId, deckListener), Deck(appContext, "B", audioSessionId, deckListener))
         phase = DjEngineState.Phase.STARTING
         userWantsPlay = true
@@ -484,6 +489,7 @@ class ExoDjMixEngine(
         decks?.forEach { it.release() }
         decks = null
         transition = null
+        announceEffectSession(open = false)
         focus.abandon()
         phase = DjEngineState.Phase.IDLE
         publish()
@@ -512,6 +518,24 @@ class ExoDjMixEngine(
                 transition = transition?.plan,
             )
         session.refresh()
+    }
+
+    /**
+     * Tells system equaliser apps about the decks' shared audio session (design §4.2), so a user's EQ applies to
+     * the mix as it does to normal playback. Close is sent once when the session ends.
+     */
+    private fun announceEffectSession(open: Boolean) {
+        if (audioSessionId == AudioManager.AUDIO_SESSION_ID_GENERATE) return
+        val action = if (open) AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION else AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION
+        runCatching {
+            appContext.sendBroadcast(
+                Intent(action)
+                    .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
+                    .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, appContext.packageName)
+                    .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC),
+            )
+        }
+        if (!open) audioSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
     }
 
     private fun emit(event: DjEngineEvent) {

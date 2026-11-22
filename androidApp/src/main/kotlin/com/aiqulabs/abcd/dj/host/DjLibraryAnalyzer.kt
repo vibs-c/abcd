@@ -17,6 +17,7 @@ import com.metrolist.shared.settings.BlockedContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,7 @@ object DjLibraryAnalyzer {
     internal const val MAX_PER_RUN = 200
     private const val MAX_SONG_SECONDS = 10 * 60
     private const val TAG = "DjLibraryAnalyzer"
+    private const val PREPARATION_POLL_MS = 1_000L
 
     private val mutableState = MutableStateFlow<LibraryAnalysisState>(LibraryAnalysisState.Idle)
 
@@ -106,6 +108,9 @@ object DjLibraryAnalyzer {
                     Timber.tag(TAG).w("Stopping: the phone is out of space")
                     break
                 }
+                // A mix being prepared has priority: both share one analysis slot (AnalysisGate), so a running
+                // batch would otherwise halve preparation speed. Wait between songs until the mix is ready.
+                while (DjController.isPreparing) delay(PREPARATION_POLL_MS)
                 when (preparer.prepare(song.toDjTrack())) {
                     is TrackPreparation.Ready -> analysed++
                     is TrackPreparation.Failed -> failed++

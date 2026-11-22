@@ -468,6 +468,23 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
   schema change); library analysis and session preparation share `AnalysisGate`, so a running library
   batch roughly halves preparation speed.
 
+## 2026-11-22 · Stage 8d: stage 1-8 discrepancies fixed, plan for 9-12
+
+- **Fixed** (audit of STAGES.md, the brief and DJ_ENGINE_DESIGN.md against the code):
+  synced lyrics now re-rank chorus candidates (`DjLyrics` → `ChorusRanker`, §5.5; the stage 6 carry-over)
+  in preparation and the Lab, through Metrolist's lyrics repository (no new endpoint; 8 s timeout; no lyrics
+  = audio-only ranking); played session files are deleted after playing (`DjAudioProvider.unpin`, stage 6);
+  the next two tracks' files are prefetched (design §7); pause-on-mute acts on the mix, Device Connect
+  following blocks DJ Mode, cast/Listen Together connecting ends it (design §8); the decks' audio session is
+  announced to system EQ apps (design §4.2); "Analyse my library" waits while a mix is being prepared
+  (they share one analysis slot, which halved preparation speed). Design doc, CLAUDE.md, UPSTREAM_CHANGES
+  synced with what was built (sleep timer pauses the mix; mini bar deferred to stage 10).
+- **Verified on the emulator:** 19 DJ instrumented tests; a mix with 5 new songs (lyrics found for 4, main
+  chorus moved for 2); played files removed after each "next".
+- **Not discrepancies (planned):** TrackTag rows and more candidate sources (stage 10), Room migrations
+  (stage 12). The owner's 8c feedback (mixing only at song ends, volume dip, audible changes) is stage 9; the
+  plan for 9-12 is in STAGES.md.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.
