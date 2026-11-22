@@ -6,6 +6,12 @@
 
 Built for house parties and road trips, India first: Hindi, English, Punjabi, Tamil, Telugu and more.
 
+![Version](https://img.shields.io/badge/version-1.0.0--alpha1-orange?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
+
+[What it does](#what-it-does) · [How it works](#how-it-works) · [Roadmap](#roadmap) · [Build](#build-it-yourself) · [Changelog](CHANGELOG.md)
+
 </div>
 
 ---
@@ -127,8 +133,37 @@ engine design ([`DJ_ENGINE_DESIGN.md`](docs/DJ_ENGINE_DESIGN.md)), the build pla
 
 abcd is in **alpha** (`1.0.0-alpha1`), Android only, and distributed as an APK. v1 is complete:
 analysis, the two-deck engine, beat-matched and echo transitions with a bass swap, the live screen with
-its timeline, and learning from feedback. A chorus editor is planned for v2. See
-[`docs/STAGES.md`](docs/STAGES.md).
+its timeline, and learning from feedback. What changed in each version is in [`CHANGELOG.md`](CHANGELOG.md);
+the build plan is in [`docs/STAGES.md`](docs/STAGES.md).
+
+## Roadmap
+
+**v1 · Stable app** (now, in alpha): everything described above.
+
+**v2 · Polished app**
+- **More options** on the setup screen: genre filter, a free-text vibe ("90s Bollywood wedding dance"),
+  the energy arc of the set, and seed songs the DJ must play.
+- **DJ details page** from the live screen: BPM, key and energy of both decks, the waveform with the beat
+  grid and the planned mix point, a countdown with the technique name, and controls such as "Mix now",
+  "More energy" / "Less energy", "Lock" (play this song in full) and "Never play".
+- **Chorus editor**: drag a song's chorus start and end on its waveform, snapped to bars and beats; your
+  edit is used for chorus jumps and Chorus Hits and survives re-analysis.
+- **More transitions**: filter sweep, drop cut, a stand-alone bass swap for club sets, and a Club mix style.
+- **Sound pad**: air horn, siren, riser, rewind, scratch and more, played in time with the beat.
+- **Endless sessions**: songs analysed just in time during playback, so a mix starts sooner and never has
+  to end.
+- **Look-ahead planning** of the whole set instead of one transition at a time.
+- **DJ listening history**: a separate "DJ" tab inside the existing listening history, with the songs each
+  mix played.
+- Export and import of the DJ database, and tuning of the scoring weights in the Lab.
+- A single-stream mixing engine (C++/Oboe) if two players ever drift on some phones.
+
+**v3 · Major features**
+- **Shared song database** (opt-in): a song analysed once by anyone is ready for everyone, and corrected
+  choruses from many users converge on the right one. Only analysis results and anonymous feedback are
+  shared, never audio or personal data.
+- **On-device AI** to understand a free-text vibe, running locally on the phone.
+- **Autonomous effects**: the DJ adds a riser before a drop or an air horn on a big chorus by itself.
 
 ## Build it yourself
 

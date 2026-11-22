@@ -592,6 +592,13 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
   it to upstream's server. Release keystore generated at `C:\ABCD\keystore\` (outside the repo; password in
   the text file next to it); NativeEcho added to dj-native's consumer R8 rules.
 
+## 2026-11-22 · Owner decisions after the alpha
+
+- **DJ plays in the listening history: yes, in v2**, as a separate "DJ" tab inside the existing history button,
+  not mixed into Metrolist's normal history or scrobbles. v1 already stores what each mix played (`dj_session`).
+- **Merged `feat/dj-mode-v1` into `main`** and tagged `v1.0.0-alpha1`.
+- README gains a v2/v3 roadmap; `CHANGELOG.md` added; `SECURITY.md` no longer points at upstream's email.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

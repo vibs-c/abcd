@@ -177,6 +177,13 @@ to system EQ apps (design §4.2); design doc and CLAUDE.md synced with what was 
   Chorus Hits use the user's main chorus first.
 - **Check:** fix a chorus, save, re-analyse in Lab: the fix survives, and Chorus Hits uses it.
 
+## v2 additions requested by the owner
+
+- **DJ listening history** (owner, 2026-11-22): DJ plays appear in a separate "DJ" tab, a sub-menu of the
+  existing listening-history button, not mixed into the normal history or scrobbles. Data source: the
+  `dj_session` rows (tracks played per session) already written since stage 10.
+- **Chorus editor** (stage 11, moved to v2).
+
 ## Backlog (found during testing; not scheduled yet)
 
 - **Debug build feels laggy** (owner, stage 1). Expected for debug builds (no R8, Compose debug).
