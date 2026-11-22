@@ -1,9 +1,10 @@
 # abcd (Anybody Can DJ): agent guide
 
 abcd is a fork of Metrolist (KMP YouTube Music client) that adds a DJ Mode.
-The product brief is `docs/ABCD_rev2.md`. Build **v1 only**. v2/v3 items get hooks
-(interfaces, enum values, DB columns, settings fields), never implementations.
-Work follows `docs/STAGES.md` (12 stages, model per stage, high effort). Never use Plan mode. The owner
+The product brief is `docs/ABCD_rev2.md`. **v1 is shipped** (`1.0.0-alpha1`, tag `v1.0.0-alpha1`; stages in
+`docs/STAGES.md`). **v2 is being planned in `docs/V2_PLAN.md`**: build only what its agreed stage plan says,
+on branch `feat/v2`; v3 items still get hooks only, never implementations.
+Never use Plan mode. The owner
 wants work built directly, without plan/approval round-trips. Engine design (approved): `docs/DJ_ENGINE_DESIGN.md`.
 
 ## Owner rules (these override AGENTS.md where they conflict)
