@@ -1,0 +1,31 @@
+name: Report a bug
+description: Something in abcd does not work as it should
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: abcd version
+      description: The APK name or Settings → About (for example 1.0.0-alpha1).
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: Pixel 7, Android 15
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead. For DJ Mode, say which languages, mood, mix style and length you chose.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: DJ log (optional)
+      description: Tap the "Start a mix" title 7 times, open the Lab, tap "Copy DJ log" and paste it here. It stays on your phone until you paste it.
+      render: text

@@ -1,0 +1,11 @@
+name: Suggest an idea
+description: A feature or change you would like in abcd
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What you would like and why. Check the roadmap in the README first; it may already be planned for v2 or v3.
+    validations:
+      required: true
