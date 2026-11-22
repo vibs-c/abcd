@@ -9,12 +9,18 @@ import com.aiqulabs.abcd.dj.nativelib.NativeEcho
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.pow
+import kotlin.math.sin
 
 /**
- * One deck's audio chain (brief §9.1): loudness trim → echo (stage 9, native) → safety limiter.
+ * One deck's audio chain (brief §9.1): loudness trim → bass level (stage 12) → echo (stage 9, native) → safety limiter.
+ *
+ * Bass: [setBass] lowers the low end (below ~[BASS_HZ] Hz, 2nd-order low-pass subtracted) for the bass swap of a
+ * beat-matched blend. The level glides per sample (~[BASS_GLIDE_SECONDS] s), so EQ moves never click.
  *
  * Trim: [setTrimDb] makes tracks of different loudness sit at the same perceived level (from the analysis LUFS).
  * Fades are not done here; the engine sets the player's volume, which comes after.
@@ -30,6 +36,17 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
     @Volatile private var trimGain = 1f
 
     @Volatile private var echo = EchoParams.OFF
+
+    @Volatile private var bassTarget = 1f
+    private var bassLevel = 1f
+    private var bassGlide = 0f
+    private var lpB0 = 0f
+    private var lpB1 = 0f
+    private var lpB2 = 0f
+    private var lpA1 = 0f
+    private var lpA2 = 0f
+    private var lpZ1 = FloatArray(0)
+    private var lpZ2 = FloatArray(0)
     private var echoLine: NativeEcho? = null
     private var echoTailFrames = 0
 
@@ -47,6 +64,13 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
         echo = params
     }
 
+    /** Bass level 0..1; 1 leaves the song untouched. */
+    fun setBass(level: Float) {
+        bassTarget = level.coerceIn(0f, 1f)
+    }
+
+    private val bassActive: Boolean get() = bassTarget < 0.999f || bassLevel < 0.999f
+
     /** Forgets any echo (new song on the deck). */
     fun resetEcho() {
         echo = EchoParams.OFF
@@ -57,6 +81,19 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT) throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         releaseStep = (1.0 - exp(-1.0 / (RELEASE_SECONDS * inputAudioFormat.sampleRate))).toFloat()
+        bassGlide = (1.0 - exp(-1.0 / (BASS_GLIDE_SECONDS * inputAudioFormat.sampleRate))).toFloat()
+        // RBJ low-pass biquad, Q = 0.707 (Butterworth).
+        val w0 = 2.0 * PI * BASS_HZ / inputAudioFormat.sampleRate
+        val alpha = sin(w0) / (2.0 * 0.7071)
+        val c = cos(w0)
+        val a0 = 1.0 + alpha
+        lpB0 = ((1.0 - c) / 2.0 / a0).toFloat()
+        lpB1 = ((1.0 - c) / a0).toFloat()
+        lpB2 = lpB0
+        lpA1 = (-2.0 * c / a0).toFloat()
+        lpA2 = ((1.0 - alpha) / a0).toFloat()
+        lpZ1 = FloatArray(inputAudioFormat.channelCount.coerceAtLeast(1))
+        lpZ2 = FloatArray(inputAudioFormat.channelCount.coerceAtLeast(1))
         return inputAudioFormat
     }
 
@@ -71,7 +108,7 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
         inputBuffer.position(inputBuffer.position() + count * 2)
 
         val params = echo
-        if (params.isActive || echoTailFrames > 0) applyEcho(params, count, frames, channels) else applyTrimAndLimit(count, channels)
+        if (params.isActive || echoTailFrames > 0 || bassActive) applyFloatChain(params, count, frames, channels) else applyTrimAndLimit(count, channels)
 
         val out = replaceOutputBuffer(count * 2)
         out.order(ByteOrder.nativeOrder()).asShortBuffer().put(shorts, 0, count)
@@ -99,26 +136,18 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
         envelope = env
     }
 
-    /** Echo path: to float (with trim), through the native echo, then limit back to 16 bit. */
-    private fun applyEcho(
+    /** Float path: to float (with trim), bass level, the native echo when needed, then limit back to 16 bit. */
+    private fun applyFloatChain(
         params: EchoParams,
         count: Int,
         frames: Int,
         channels: Int,
     ) {
-        val line = echoLine ?: NativeEcho(inputAudioFormat.sampleRate, channels).also { echoLine = it }
         if (floats.capacity() < count) floats = ByteBuffer.allocateDirect(count * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
         val gain = trimGain / FULL_SCALE
         for (k in 0 until count) floats.put(k, shorts[k] * gain)
-        val delayFrames = (params.delayMs * inputAudioFormat.sampleRate / 1000L).toInt().coerceAtLeast(1)
-        line.process(floats, frames, delayFrames, params.send, params.feedback, params.dry, params.wet)
-        // Keep processing after the echo is switched off until the repeats have died away.
-        echoTailFrames =
-            if (params.isActive) {
-                (delayFrames * TAIL_REPEATS).coerceAtLeast(delayFrames)
-            } else {
-                (echoTailFrames - frames).coerceAtLeast(0)
-            }
+        if (bassActive) applyBass(count, channels)
+        if (params.isActive || echoTailFrames > 0) applyEcho(params, count, frames, channels)
         var env = envelope
         var i = 0
         while (i + channels <= count) {
@@ -129,6 +158,52 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
             i += channels
         }
         envelope = env
+    }
+
+    /** x + (level - 1) * lowpass(x): level 1 leaves the song as it is, 0 takes the bass out. */
+    private fun applyBass(
+        count: Int,
+        channels: Int,
+    ) {
+        if (lpZ1.size < channels) {
+            lpZ1 = FloatArray(channels)
+            lpZ2 = FloatArray(channels)
+        }
+        val target = bassTarget
+        var level = bassLevel
+        var i = 0
+        while (i + channels <= count) {
+            level += (target - level) * bassGlide
+            for (c in 0 until channels) {
+                val x = floats.get(i + c)
+                // Transposed direct form II.
+                val low = lpB0 * x + lpZ1[c]
+                lpZ1[c] = lpB1 * x - lpA1 * low + lpZ2[c]
+                lpZ2[c] = lpB2 * x - lpA2 * low
+                floats.put(i + c, x + (level - 1f) * low)
+            }
+            i += channels
+        }
+        bassLevel = level
+    }
+
+    /** Echo: through the native echo line, in place on the float buffer. */
+    private fun applyEcho(
+        params: EchoParams,
+        count: Int,
+        frames: Int,
+        channels: Int,
+    ) {
+        val line = echoLine ?: NativeEcho(inputAudioFormat.sampleRate, channels).also { echoLine = it }
+        val delayFrames = (params.delayMs * inputAudioFormat.sampleRate / 1000L).toInt().coerceAtLeast(1)
+        line.process(floats, frames, delayFrames, params.send, params.feedback, params.dry, params.wet)
+        // Keep processing after the echo is switched off until the repeats have died away.
+        echoTailFrames =
+            if (params.isActive) {
+                (delayFrames * TAIL_REPEATS).coerceAtLeast(delayFrames)
+            } else {
+                (echoTailFrames - frames).coerceAtLeast(0)
+            }
     }
 
     private fun nextEnvelope(
@@ -143,6 +218,9 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
 
     override fun onFlush() {
         envelope = 1f
+        lpZ1.fill(0f)
+        lpZ2.fill(0f)
+        bassLevel = bassTarget
         echoTailFrames = 0
         echoLine?.clear()
     }
@@ -150,6 +228,8 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
     override fun onReset() {
         envelope = 1f
         trimGain = 1f
+        bassTarget = 1f
+        bassLevel = 1f
         echo = EchoParams.OFF
         echoTailFrames = 0
         echoLine?.release()
@@ -177,6 +257,10 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
         private const val FULL_SCALE = 32768f
         private const val RELEASE_SECONDS = 0.12
 
+        /** Bass band edge for the bass swap. */
+        private const val BASS_HZ = 180.0
+        private const val BASS_GLIDE_SECONDS = 0.02
+
         /** After the echo is switched off, keep running this many delay periods for the tail. */
         private const val TAIL_REPEATS = 12
 
@@ -187,8 +271,11 @@ internal class DeckGainProcessor : BaseAudioProcessor() {
         const val HEADROOM_DB = 2.0
         const val MAX_TRIM_DB = 12.0
 
+        /** Quiet songs are lifted at most this much: more only makes the limiter pump (stage 12). */
+        const val MAX_BOOST_DB = 4.0
+
         /** Trim for a track measured at [lufs]: towards [TARGET_LUFS], clamped, minus the headroom. */
         fun trimDbFor(lufs: Double): Double =
-            if (lufs.isNaN() || lufs < -70.0) -HEADROOM_DB else (TARGET_LUFS - lufs).coerceIn(-MAX_TRIM_DB, MAX_TRIM_DB) - HEADROOM_DB
+            if (lufs.isNaN() || lufs < -70.0) -HEADROOM_DB else (TARGET_LUFS - lufs).coerceIn(-MAX_TRIM_DB, MAX_BOOST_DB) - HEADROOM_DB
     }
 }

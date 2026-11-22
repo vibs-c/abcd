@@ -5,10 +5,10 @@ import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.model.Script
 
 /** Kind of tag stored in `TrackTag` (brief §6.1). */
-enum class TagType { LANGUAGE, MOOD, GENRE, ERA, ENERGY_CLASS }
+enum class TagType { LANGUAGE, MOOD, GENRE, ERA, ENERGY_CLASS, VIBE }
 
 /** Where a tag came from. USER always wins over the others. */
-enum class TagSource { METADATA, ANALYSIS, LLM, USER }
+enum class TagSource { METADATA, ANALYSIS, LLM, USER, LYRICS }
 
 /** One tag with its provenance, ready to sync to a shared server later (§6.4). */
 data class TrackTagValue(
@@ -46,7 +46,7 @@ class MetadataTrackTagger : TrackTagger {
         lyrics: String?,
     ): List<TrackTagValue> {
         val tags = LinkedHashMap<DjLanguage, Float>()
-        val text = listOfNotNull(track.title, track.album, lyrics).joinToString(" ")
+        val text = listOfNotNull(track.title, track.album).joinToString(" ")
         val script = ScriptDetector.dominantScript(text)
         if (script != null && script != Script.LATIN) {
             val matching = DjLanguage.entries.filter { script in it.scripts }
@@ -64,9 +64,12 @@ class MetadataTrackTagger : TrackTagger {
         RomanizedIndicHints.languageWords(track).forEach { (language, confidence) ->
             tags[language] = maxOf(tags[language] ?: 0f, confidence)
         }
-        return tags.map { (language, confidence) ->
-            TrackTagValue(TagType.LANGUAGE, language.name, TagSource.METADATA, confidence)
-        }
+        val fromTitle =
+            tags.map { (language, confidence) ->
+                TrackTagValue(TagType.LANGUAGE, language.name, TagSource.METADATA, confidence)
+            }
+        // Lyrics are judged separately (stage 12) and keep their own source, so they can be stored and reused.
+        return fromTitle + lyrics?.let(LyricsLanguage::tags).orEmpty()
     }
 
     private companion object {

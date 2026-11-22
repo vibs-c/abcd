@@ -124,6 +124,24 @@ interface DjDao {
     @Upsert
     suspend fun upsertTags(tags: List<TrackTagEntity>)
 
+    @Query("DELETE FROM track_tag WHERE videoId = :videoId AND source = :source AND tagType = :tagType")
+    suspend fun deleteTagsOfType(
+        videoId: String,
+        source: String,
+        tagType: String,
+    )
+
+    /** Replaces the user's tags of one type (stage 12, Lab). An empty list removes them (back to automatic). */
+    @Transaction
+    suspend fun replaceUserTags(
+        videoId: String,
+        tagType: String,
+        tags: List<TrackTagEntity>,
+    ) {
+        deleteTagsOfType(videoId, "USER", tagType)
+        if (tags.isNotEmpty()) upsertTags(tags)
+    }
+
     /** Replaces the tags one source gave [videoId]; other sources' tags (the user's above all) stay. */
     @Transaction
     suspend fun replaceTags(
@@ -182,6 +200,15 @@ interface DjDao {
         videoId: String,
         banned: Boolean,
     )
+
+    @Query("SELECT * FROM track_feedback WHERE videoId = :videoId")
+    suspend fun trackFeedback(videoId: String): TrackFeedbackEntity?
+
+    @Query("SELECT * FROM transition_feedback WHERE fromVideoId = :videoId OR toVideoId = :videoId ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun transitionsWith(
+        videoId: String,
+        limit: Int,
+    ): List<TransitionFeedbackEntity>
 
     /** Only rows that change anything: skipped, removed or banned tracks. */
     @Query("SELECT * FROM track_feedback WHERE skipCount > 0 OR removeCount > 0 OR banned = 1")

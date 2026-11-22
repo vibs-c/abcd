@@ -239,6 +239,9 @@ class App :
 
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
+        } else {
+            // abcd: release builds keep the DJ's own info/warning lines in the local log for the Lab problem report.
+            com.aiqulabs.abcd.dj.host.DjLog.plantReleaseTree()
         }
 
         val koinStart = SystemClock.elapsedRealtime()

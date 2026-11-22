@@ -43,7 +43,8 @@ fun DjTab(modifier: Modifier = Modifier) {
     val playerConnection = LocalPlayerConnection.current
     val store = remember { DjSetupStore(appContext) }
     var draft by remember { mutableStateOf(store.load()) }
-    var labEnabled by remember { mutableStateOf(store.labEnabled) }
+    var labUnlocked by remember { mutableStateOf(store.labUnlocked) }
+    var labEnabled by remember { mutableStateOf(store.labEnabled && store.labUnlocked) }
     var labOpen by remember { mutableStateOf(false) }
     val startState by DjController.state.collectAsState()
     val libraryState by DjLibraryAnalyzer.state.collectAsState()
@@ -91,6 +92,7 @@ fun DjTab(modifier: Modifier = Modifier) {
                         DjLabController.audition(from, to, technique) { playerConnection?.awaitConnected() }
                     },
                     onStopAudition = DjLabController::stopAudition,
+                    onSetTags = DjLabController::setTags,
                 ),
             modifier = modifier.fillMaxSize(),
             contentPadding = insets,
@@ -100,8 +102,9 @@ fun DjTab(modifier: Modifier = Modifier) {
 
     val running = engineState
     if (live != null && running != null && !showSetup) {
+        val timeline by rememberDjTimeline()
         DjLiveScreen(
-            ui = DjLiveScreenUi(live, queueOf(running), lastTransition?.let { DjThumbsUi(it.fromTitle, it.toTitle, it.rating) }),
+            ui = DjLiveScreenUi(live, queueOf(running), lastTransition?.let { DjThumbsUi(it.fromTitle, it.toTitle, it.rating) }, timeline),
             actions =
                 DjLiveActions(
                     onPlayPause = DjPlayback::togglePlayPause,
@@ -141,6 +144,16 @@ fun DjTab(modifier: Modifier = Modifier) {
             store.labEnabled = it
         },
         onOpenLab = { labOpen = true },
+        labUnlocked = labUnlocked,
+        onLabUnlockedChange = {
+            labUnlocked = it
+            store.labUnlocked = it
+            if (!it) {
+                // Hiding the developer switch also switches the Lab off.
+                labEnabled = false
+                store.labEnabled = false
+            }
+        },
         modifier = modifier.fillMaxSize(),
         contentPadding = insets,
         live = live,

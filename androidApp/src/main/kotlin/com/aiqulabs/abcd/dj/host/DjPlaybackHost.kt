@@ -10,7 +10,9 @@ import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
 import com.aiqulabs.abcd.dj.data.DjData
+import com.aiqulabs.abcd.dj.core.analysis.AnalysisResult
 import com.aiqulabs.abcd.dj.engine.DjEngineEvent
+import com.aiqulabs.abcd.dj.engine.DjProgress
 import com.aiqulabs.abcd.dj.engine.DjMixEngine
 import com.aiqulabs.abcd.dj.engine.DjMixSession
 import com.aiqulabs.abcd.dj.engine.DjSessionRequests
@@ -70,6 +72,7 @@ internal class DjPlaybackHost(
     private val files = HashMap<String, DjAudioFile>()
     private var order: List<DjTrack> = emptyList()
     private var recorder: DjFeedbackRecorder? = null
+    private var analyses: Map<String, AnalysisResult> = emptyMap()
 
     /** True from [enter] until an exit starts; the guard in MusicService ends DJ Mode while this is true. */
     val isActive: Boolean get() = engine != null
@@ -124,6 +127,7 @@ internal class DjPlaybackHost(
         try {
             this.songs = songs
             order = tracks.map { it.track }
+            analyses = tracks.associate { it.track.videoId to it.analysis }
             DjAudioProvider.get(context).pin(nextIds)
             // Metrolist is already stopped when one mix replaces another; keep the position from before the first.
             savedPositionMs = ops.stopNormalPlayback() ?: earlierPosition
@@ -141,6 +145,11 @@ internal class DjPlaybackHost(
     }
 
     fun play() = engine?.play()
+
+    /** Position and mix window for the live screen (stage 12). */
+    fun progress(): DjProgress? = engine?.progress()
+
+    fun analysisOf(videoId: String): AnalysisResult? = analyses[videoId]
 
     fun pause() = engine?.pause()
 
@@ -222,6 +231,7 @@ internal class DjPlaybackHost(
         files.clear()
         songs = emptyMap()
         order = emptyList()
+        analyses = emptyMap()
         return leftovers
     }
 

@@ -4,6 +4,8 @@ import com.aiqulabs.abcd.dj.core.mix.TransitionTechnique
 import com.aiqulabs.abcd.dj.core.analysis.DjDatabaseCounts
 import com.aiqulabs.abcd.dj.core.analysis.StoredAnalysis
 import com.aiqulabs.abcd.dj.core.analysis.TrackSummary
+import com.aiqulabs.abcd.dj.core.tagging.TagType
+import com.aiqulabs.abcd.dj.core.tagging.TrackTagValue
 import com.aiqulabs.abcd.dj.ui.library.LibraryAnalysisState
 
 /** A song whose audio file is on the phone (downloaded, or played recently and cached). */
@@ -20,6 +22,16 @@ data class LabDetail(
     val title: String,
     val artists: String,
     val stored: StoredAnalysis,
+    /** Every tag stored for the song (stage 12): language, type, mood, vibe, energy; automatic and the user's. */
+    val tags: List<TrackTagValue> = emptyList(),
+    /** Everything the DJ database holds for the song, grouped by table, for the "Saved data" section. */
+    val saved: List<LabSavedGroup> = emptyList(),
+)
+
+/** One table's rows for a song, already formatted ("label" to "value"). */
+data class LabSavedGroup(
+    val title: String,
+    val rows: List<Pair<String, String>>,
 )
 
 /** What the analysis is doing right now. */
@@ -74,4 +86,6 @@ data class LabActions(
     /** Audition [fromId] into [toId] with a technique (null = automatic), brief §4.5. */
     val onAudition: (fromId: String, toId: String, technique: TransitionTechnique?) -> Unit = { _, _, _ -> },
     val onStopAudition: () -> Unit = {},
+    /** The user's own [type] tags for a song; an empty list goes back to the automatic ones (stage 12). */
+    val onSetTags: (videoId: String, type: TagType, values: List<String>) -> Unit = { _, _, _ -> },
 )

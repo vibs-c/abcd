@@ -44,6 +44,9 @@ interface DjMixEngine {
     /** Releases everything immediately, without a fade (service shutting down). */
     fun close()
 
+    /** Where the playing song is and when the next mix happens, for the live screen (stage 12). Main thread. */
+    fun progress(): DjProgress? = null
+
     companion object {
         const val DEFAULT_END_FADE_MS = 1_500L
     }
@@ -72,6 +75,28 @@ interface DjSessionRequests {
         startIndex: Int,
         startPositionMs: Long,
     )
+}
+
+/**
+ * The playing song's position and the next (or running) transition's window on that song's clock, in ms.
+ * [mixStartMs]/[mixEndMs] are null until the next song is ready and the transition is planned.
+ */
+data class DjProgress(
+    val videoId: String,
+    val positionMs: Long,
+    val durationMs: Long,
+    val mixStartMs: Long?,
+    val mixEndMs: Long?,
+    val mixing: Boolean,
+) {
+    /** 0..1 through the transition while it runs. */
+    val mixProgress: Float
+        get() {
+            val start = mixStartMs ?: return 0f
+            val end = mixEndMs ?: return 0f
+            if (end <= start) return if (positionMs >= end) 1f else 0f
+            return ((positionMs - start).toFloat() / (end - start)).coerceIn(0f, 1f)
+        }
 }
 
 data class DjEngineState(

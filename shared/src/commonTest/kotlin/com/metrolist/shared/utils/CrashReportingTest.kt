@@ -2,18 +2,13 @@ package com.metrolist.shared.utils
 
 import kotlin.test.Test
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class CrashReportingTest {
+    /** abcd never sends crash reports (upstream's Sentry project is not ours). */
     @Test
-    fun plainReleaseVersionsAllowReporting() {
-        assertTrue(isCrashReportingAvailable("14.0.0"))
-        assertTrue(isCrashReportingAvailable("14.1.2"))
-    }
-
-    @Test
-    fun buildMetadataDisablesReporting() {
+    fun crashReportingIsNeverAvailable() {
+        assertFalse(isCrashReportingAvailable("14.0.0"))
+        assertFalse(isCrashReportingAvailable("1.0.0-alpha1"))
         assertFalse(isCrashReportingAvailable("14.0.0+24897bc"))
-        assertFalse(isCrashReportingAvailable("14.1.2+build.123"))
     }
 }

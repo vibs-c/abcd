@@ -1,5 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
+import timber.log.Timber
+import android.util.Log
 import android.os.Build
 import android.os.Process
 import com.metrolist.android.BuildConfig
@@ -25,6 +27,32 @@ internal object DjLog {
             "AudioCacheManager",
             "AndroidRuntime",
         )
+    /**
+     * Release builds have no Timber tree, so the DJ's lines would be lost. This one passes only the DJ tags above,
+     * at INFO and higher, to the local log (still read only by [collect]; nothing leaves the phone).
+     */
+    fun plantReleaseTree() {
+        Timber.plant(
+            object : Timber.Tree() {
+                override fun isLoggable(
+                    tag: String?,
+                    priority: Int,
+                ): Boolean = priority >= Log.INFO && tag != null && tag in djTags
+
+                override fun log(
+                    priority: Int,
+                    tag: String?,
+                    message: String,
+                    t: Throwable?,
+                ) {
+                    Log.println(priority, tag, if (t == null) message else message + System.lineSeparator() + Log.getStackTraceString(t))
+                }
+            },
+        )
+    }
+
+    private val djTags get() = tags.toSet() + setOf("DjPlaybackHost", "DjFeedback", "DjTags", "DjLyrics")
+
     private val tagPattern = Regex("""^\S+ \S+ [VDIWEF]/([^(:]+)""")
 
     fun collect(): String {

@@ -45,12 +45,26 @@ object AnalysisTagger {
         }
     }
 
+    /** One word for how the song feels (stage 12): energy × major/minor. */
+    fun vibe(a: AnalysisResult): String {
+        val major = a.key.mode == KeyMode.MAJOR
+        return when (energyClass(a)) {
+            EnergyClass.HIGH -> if (major) "UPBEAT" else "INTENSE"
+            EnergyClass.MEDIUM -> if (major) "FEEL_GOOD" else "MOODY"
+            EnergyClass.LOW -> if (major) "MELLOW" else "MELANCHOLIC"
+        }
+    }
+
     fun tags(a: AnalysisResult): List<TrackTagValue> {
         val confidence = if (a.bpmConfidence >= 0.5) STRONG else WEAK
         val energy = TrackTagValue(TagType.ENERGY_CLASS, energyClass(a).name, TagSource.ANALYSIS, confidence)
         val moods = moods(a).mapIndexed { i, mood -> TrackTagValue(TagType.MOOD, mood.name, TagSource.ANALYSIS, confidence - i * 0.1f) }
-        return listOf(energy) + moods
+        val vibe = TrackTagValue(TagType.VIBE, vibe(a), TagSource.ANALYSIS, confidence)
+        return listOf(energy) + moods + vibe
     }
+
+    /** The vibe words the Lab offers. */
+    val VIBES = listOf("UPBEAT", "INTENSE", "FEEL_GOOD", "MOODY", "MELLOW", "MELANCHOLIC", "ROMANTIC", "DEVOTIONAL", "NOSTALGIC")
 
     private const val HIGH_FROM = 0.62
     private const val LOW_UNTIL = 0.38

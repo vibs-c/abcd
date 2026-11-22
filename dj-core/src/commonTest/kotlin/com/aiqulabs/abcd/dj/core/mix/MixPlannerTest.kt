@@ -140,5 +140,27 @@ class MixPlannerTest {
         assertEquals(1f, CrossfadeCurve.outgoing(0.0))
         assertEquals(0f, CrossfadeCurve.incoming(0.0))
         assertEquals(1f, CrossfadeCurve.incoming(1.0))
+        assertEquals(0f, CrossfadeCurve.outgoing(1.0), 1e-6f)
+    }
+
+    @Test
+    fun theCrossfadeHasGentleEnds() {
+        // Stage 12: no jump at either end (the old curve was at -13 dB after 5% of the blend).
+        assertTrue(CrossfadeCurve.incoming(0.05) < 0.06f, "in at 5%: ${CrossfadeCurve.incoming(0.05)}")
+        assertTrue(CrossfadeCurve.outgoing(0.95) < 0.06f, "out at 95%: ${CrossfadeCurve.outgoing(0.95)}")
+        for (step in 1..100) {
+            val jump = CrossfadeCurve.incoming(step / 100.0) - CrossfadeCurve.incoming((step - 1) / 100.0)
+            assertTrue(jump < 0.03f, "step $step jumps by $jump")
+        }
+    }
+
+    @Test
+    fun theBasslinesSwapInTheMiddle() {
+        val width = 0.1
+        assertEquals(0f, CrossfadeCurve.incomingBass(0.3, width))
+        assertEquals(1f, CrossfadeCurve.outgoingBass(0.3, width))
+        assertEquals(0.5f, CrossfadeCurve.incomingBass(0.5, width), 1e-6f)
+        assertEquals(1f, CrossfadeCurve.incomingBass(0.7, width))
+        assertEquals(0f, CrossfadeCurve.outgoingBass(0.7, width))
     }
 }

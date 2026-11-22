@@ -4,6 +4,7 @@ import com.aiqulabs.abcd.dj.core.model.DjLanguage
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.tagging.RomanizedIndicHints
+import com.aiqulabs.abcd.dj.core.tagging.TagSource
 import com.aiqulabs.abcd.dj.core.tagging.TagType
 import com.aiqulabs.abcd.dj.core.tagging.TrackTagger
 import kotlin.random.Random
@@ -55,12 +56,17 @@ class DjPlaylistBuilder(
         val library = source.libraryTracks().filter { provenLanguage(it, normalized) }.shuffled(random).take(maxOf(2, target / LIBRARY_SHARE))
         val picked = ArrayList<DjTrack>()
         val usedIds = HashSet<String>()
-        addInOrder(interleave(perQuery + listOf(moodPage, library)), normalized, bannedVideoIds, picked, usedIds, target)
+        // Singers with a clearly Indian song among the candidates: their other songs stay out of a mix with no
+        // Indian language selected (stage 12; their English-titled Hindi songs gave themselves away nowhere else).
+        val indianArtists = HashSet<String>()
+        noteIndianArtists(perQuery.flatten() + moodPage + library, indianArtists)
+        addInOrder(interleave(perQuery + listOf(moodPage, library)), normalized, bannedVideoIds, picked, usedIds, target, indianArtists)
 
         var seedIndex = 0
         while (picked.size < target && seedIndex < minOf(picked.size, maxRadioSeeds)) {
             val radio = source.radio(picked[seedIndex].videoId)
-            addInOrder(radio, normalized, bannedVideoIds, picked, usedIds, target)
+            noteIndianArtists(radio, indianArtists)
+            addInOrder(radio, normalized, bannedVideoIds, picked, usedIds, target, indianArtists)
             seedIndex++
         }
         return PlaylistPlan(normalized, picked, core, target)
@@ -73,11 +79,12 @@ class DjPlaylistBuilder(
         picked: MutableList<DjTrack>,
         usedIds: MutableSet<String>,
         target: Int,
+        indianArtists: Set<String>,
     ) {
         val accepted =
             filter
                 .filter(candidates.filter { it.videoId !in usedIds }, banned)
-                .filter { matchesLanguage(it, settings) }
+                .filter { matchesLanguage(it, settings, indianArtists) }
         val deferred = ArrayList<DjTrack>()
         for (track in accepted) {
             if (picked.size >= target) return
@@ -128,21 +135,29 @@ class DjPlaylistBuilder(
      * Rejects a track only on strong evidence of another language (for example Tamil script when
      * the user picked Hindi). Transliterated Latin titles carry no language tag, so they pass.
      */
+    /** The shared language rule ([LanguageGate]) with this mix's known Indian singers. */
     private suspend fun matchesLanguage(
         track: DjTrack,
         settings: DjSessionSettings,
+        indianArtists: Set<String>,
     ): Boolean {
         if (settings.anyLanguage) return true
-        // No Indian language picked (e.g. English only): Latin-script titles are not enough, because most Hindi
-        // songs have transliterated titles. Drop songs with Indian evidence (film marker, Hindi/Punjabi words,
-        // Indian artists).
-        val indianPicked = settings.languages.any { it != DjLanguage.ENGLISH && it != DjLanguage.ANY }
-        if (!indianPicked && RomanizedIndicHints.indianScore(track) >= STRONG_LANGUAGE_EVIDENCE) return false
-        val languageTags = tagger.tag(track).filter { it.type == TagType.LANGUAGE }
-        if (languageTags.isEmpty()) return true
-        val selected = settings.languages.map(DjLanguage::name).toSet()
-        if (languageTags.any { it.value in selected }) return true
-        return languageTags.none { it.confidence >= STRONG_LANGUAGE_EVIDENCE }
+        return LanguageGate.allows(track, tagger.tag(track), settings, indianArtist = track.artistKeys.any { it in indianArtists })
+    }
+
+    private suspend fun noteIndianArtists(
+        candidates: List<DjTrack>,
+        into: MutableSet<String>,
+    ) {
+        for (track in candidates) {
+            val tags = tagger.tag(track).filter { it.type == TagType.LANGUAGE }
+            val indianTag = tags.any { it.value != DjLanguage.ENGLISH.name && it.confidence >= STRONG_LANGUAGE_EVIDENCE }
+            val englishByUser = tags.any { it.source == TagSource.USER && it.value == DjLanguage.ENGLISH.name }
+            if (!englishByUser && (indianTag || RomanizedIndicHints.indianScore(track) >= STRONG_LANGUAGE_EVIDENCE)) {
+                // Only solo songs: a collaboration does not make every artist on it an Indian singer.
+                track.artistKeys.singleOrNull()?.let(into::add)
+            }
+        }
     }
 
     /**
@@ -155,7 +170,9 @@ class DjPlaylistBuilder(
     ): Boolean {
         if (settings.anyLanguage) return true
         val selected = settings.languages.map(DjLanguage::name).toSet()
-        val tags = tagger.tag(track).filter { it.type == TagType.LANGUAGE }
+        val all = tagger.tag(track)
+        if (!LanguageGate.allows(track, all, settings)) return false
+        val tags = all.filter { it.type == TagType.LANGUAGE }
         if (tags.any { it.value in selected }) return true
         return DjLanguage.ENGLISH in settings.languages && tags.isEmpty() && RomanizedIndicHints.indianScore(track) < WEAK_INDIAN_EVIDENCE
     }

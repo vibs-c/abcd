@@ -1,5 +1,16 @@
 package com.aiqulabs.abcd.dj.ui.setup
 
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.metrolist.shared.generated.resources.dj_lab_unlocked
+import com.metrolist.shared.generated.resources.dj_lab_hidden
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -104,6 +115,8 @@ private const val LENGTH_STEP_MINUTES = 15
  * @param libraryState progress of the "Analyse my library" batch.
  * @param onAnalyseLibrary called when the user starts the library batch.
  * @param onStopLibrary called when the user stops the library batch.
+ * @param labUnlocked whether the developer switch is visible: tapping the "Start a mix" title 7 times toggles it.
+ * @param onLabUnlockedChange called when the 7 taps unlock or hide the developer switch.
  * @param labEnabled whether the developer Lab is switched on (brief §4.5).
  * @param onLabEnabledChange called when the Lab switch is toggled.
  * @param onOpenLab called when the user opens the Lab.
@@ -125,6 +138,8 @@ fun DjSetupScreen(
     onLabEnabledChange: (Boolean) -> Unit,
     onOpenLab: () -> Unit,
     modifier: Modifier = Modifier,
+    labUnlocked: Boolean = false,
+    onLabUnlockedChange: (Boolean) -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(),
     live: DjLiveUi? = null,
     onLivePlayPause: () -> Unit = {},
@@ -149,7 +164,7 @@ fun DjSetupScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(Res.string.dj_setup_title), style = MaterialTheme.typography.headlineMedium)
+            SecretTapTitle(labUnlocked, onLabUnlockedChange)
             Text(
                 stringResource(Res.string.dj_setup_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
@@ -250,10 +265,44 @@ fun DjSetupScreen(
             }
         }
         LibraryAnalysisCard(libraryState, onStart = onAnalyseLibrary, onStop = onStopLibrary)
-        LabSwitch(labEnabled, onLabEnabledChange, onOpenLab)
+        if (labUnlocked) LabSwitch(labEnabled, onLabEnabledChange, onOpenLab)
         Spacer(Modifier.height(24.dp))
     }
 }
+
+/**
+ * The "Start a mix" title. Seven quick taps show (or hide again) the developer Lab switch, like Android's
+ * "build number" trick, so ordinary users never see it.
+ */
+@Composable
+private fun SecretTapTitle(
+    unlocked: Boolean,
+    onUnlockedChange: (Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    var taps by remember { mutableIntStateOf(0) }
+    var lastTapAt by remember { mutableLongStateOf(0L) }
+    val shownText = stringResource(Res.string.dj_lab_unlocked)
+    val hiddenText = stringResource(Res.string.dj_lab_hidden)
+    Text(
+        stringResource(Res.string.dj_setup_title),
+        style = MaterialTheme.typography.headlineMedium,
+        modifier =
+            Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                val now = System.currentTimeMillis()
+                taps = if (now - lastTapAt > SECRET_TAP_WINDOW_MS) 1 else taps + 1
+                lastTapAt = now
+                if (taps >= SECRET_TAPS) {
+                    taps = 0
+                    onUnlockedChange(!unlocked)
+                    Toast.makeText(context, if (unlocked) hiddenText else shownText, Toast.LENGTH_SHORT).show()
+                }
+            },
+    )
+}
+
+private const val SECRET_TAPS = 7
+private const val SECRET_TAP_WINDOW_MS = 1_500L
 
 /** Developer-only switch (brief §4.5). Off by default; when on, an "Open Lab" button appears. */
 @Composable

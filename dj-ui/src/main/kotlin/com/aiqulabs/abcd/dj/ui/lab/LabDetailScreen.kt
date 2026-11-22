@@ -80,6 +80,8 @@ internal fun LabDetailScreen(
 
         WaveformStrip(result)
 
+        SongDetailsCard(detail.tags) { type, values -> actions.onSetTags(detail.videoId, type, values) }
+
         Fact(
             stringResource(Res.string.dj_lab_label_tempo),
             stringResource(Res.string.dj_lab_bpm_row, formatDecimal(result.bpm, 2), formatPercent(result.bpmConfidence)),
@@ -132,6 +134,8 @@ internal fun LabDetailScreen(
         }
 
         Fact(stringResource(Res.string.dj_lab_label_info), infoLine(result, detail.stored.analyzedAt))
+
+        SavedDataSection(detail.saved)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Button(onClick = { actions.onAnalyse(detail.videoId) }, enabled = !busy, modifier = Modifier.weight(1f)) {

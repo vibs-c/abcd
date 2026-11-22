@@ -1,6 +1,7 @@
 package com.aiqulabs.abcd.dj.ui.live
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -38,6 +39,7 @@ fun DjMiniBar(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    timeline: DjTimelineUi? = null,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -46,6 +48,8 @@ fun DjMiniBar(
         tonalElevation = 3.dp,
         shadowElevation = 3.dp,
     ) {
+        Box(Modifier.fillMaxHeight()) {
+        timeline?.let { DjMiniProgress(it, Modifier.align(Alignment.BottomCenter).padding(horizontal = 14.dp, vertical = 2.dp)) }
         Row(
             modifier = Modifier.fillMaxHeight().clickable(onClick = onOpen).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -77,6 +81,7 @@ fun DjMiniBar(
             IconButton(onClick = onNext, enabled = enabled && live.nextTitle != null) {
                 Icon(MetrolistIconsFilled.SkipNext, contentDescription = stringResource(Res.string.dj_next), tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
+        }
         }
     }
 }

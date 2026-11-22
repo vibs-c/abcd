@@ -36,7 +36,12 @@ internal class DjTrackPreparer(
         try {
             val saved = repository.load(track.videoId)
             if (saved != null && saved.result.analysisVersion >= analyzer.analysisVersion) {
-                feedback?.let { DjTags.saveIfMissing(it, track, saved.result) }
+                feedback?.let { tags ->
+                    DjTags.saveIfMissing(tags, track, saved.result)
+                    // Songs analysed before stage 12: look at their lyrics once, so their language is known (owner report).
+                    val song = songFor(track.videoId)
+                    if (song != null && DjTags.needsLyricsCheck(tags, track.videoId)) DjTags.checkLyrics(tags, track, song, saved.result)
+                }
                 TrackPreparation.Ready(saved.result, alreadyKnown = true)
             } else {
                 // One stalled download or decoder must not freeze "Preparing your mix" on this song forever.
@@ -57,7 +62,7 @@ internal class DjTrackPreparer(
         val ranked = DjLyrics.rankChoruses(song, decodeAndAnalyse(song))
         val result = ranked.result
         repository.save(track.videoId, result, track)
-        feedback?.let { DjTags.save(it, track, result, ranked.lyricsText) }
+        feedback?.let { DjTags.save(it, track, result, ranked.lyricsText, lyricsLookedUp = true) }
         Timber.tag(TAG).d("%s analysed in %d ms", track.videoId, (System.nanoTime() - started) / 1_000_000)
         return TrackPreparation.Ready(result, alreadyKnown = false)
     }

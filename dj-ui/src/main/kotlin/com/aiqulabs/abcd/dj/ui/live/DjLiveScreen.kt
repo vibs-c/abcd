@@ -90,6 +90,8 @@ data class DjLiveScreenUi(
     val live: DjLiveUi,
     val queue: List<DjQueueItem>,
     val thumbs: DjThumbsUi?,
+    /** Song progress and the coming mix (stage 12). */
+    val timeline: DjTimelineUi? = null,
 )
 
 class DjLiveActions(
@@ -149,6 +151,7 @@ fun DjLiveScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                ui.timeline?.let { DjTimeline(it, Modifier.padding(top = 4.dp)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     FilledIconButton(onClick = actions.onPlayPause, enabled = enabled, modifier = Modifier.size(56.dp)) {
                         Icon(

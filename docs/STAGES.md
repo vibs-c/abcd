@@ -165,7 +165,10 @@ to system EQ apps (design §4.2); design doc and CLAUDE.md synced with what was 
 - **Decide with the owner:** should DJ plays appear in Metrolist's listening history / scrobbles (design §8)?
 - **Check:** thumbs work; removing a song skips it; the mini bar shows on Home; liked songs appear in mixes.
 
-## 11. Chorus editor · Sonnet · ⬜ (brief §4.4)
+## 11. Chorus editor · moved to v2 (owner, 2026-11-22) (brief §4.4)
+
+- **Moved to v2** by the owner after stage 10: v1 ships without the chorus editor. The plan below is kept
+  for v2. Automatic chorus detection (stage 4/9) and synced-lyrics ranking stay in v1.
 
 - Waveform with sections and chorus regions; drag start/end handles that snap to bars/beats (snap toggle);
   add/delete segments; choose the main chorus; preview from 4 bars before the segment to its end; save as
@@ -189,7 +192,35 @@ to system EQ apps (design §4.2); design doc and CLAUDE.md synced with what was 
   `git config core.hooksPath .githooks` if wanted; all current commit messages already pass them.
 - **Sentry in release builds** sends opt-in crash reports to Metrolist's project. Handled in stage 12.
 
-## 12. Make v1 stable and build a release · Opus · ⬜ (brief §1)
+## 12. Make v1 shippable (alpha) · Opus · ✅ 2026-11-22 (brief §1)
+
+**Owner's list (done):**
+1. **Hindi songs in an English-only mix:** one language rule for every check (`LanguageGate`): user tags are
+   final, otherwise the strongest language evidence wins; lyrics are read for their language (script and
+   Hindi/Punjabi words, `LyricsLanguage`) at analysis, and once for songs analysed earlier; a second check after
+   preparation drops songs whose lyrics are in a language that was not chosen; a singer with a clearly Indian
+   song keeps their other songs out of a non-Indian mix; more Indian singers known. Song details stored at
+   analysis: language (title + lyrics), type (genre guess), mood, energy, vibe. Lab: "Song details" to edit
+   language / type / mood / vibe (stored as USER, they win everywhere) and "Saved in the database" with every
+   stored field of the song.
+2. **Live timeline:** waveform of the playing song with the played part lit, choruses, the coming mix window
+   ("MIX"), a glowing playhead, elapsed/remaining time, "Mix in 0:42 · 12 bars" / "Mixing into … 45%", a beat
+   pulse and BPM/key; a thin progress line with the mix window in the mini bar.
+3. **No sudden volume jumps while blending:** smooth equal-power crossfade (no jump at either end), bass swap in
+   beat-matched blends (one bassline at a time), smoother echo-out, quiet songs boosted at most +4 dB.
+4. **Lab switch hidden:** tap the "Start a mix" title 7 times to show (or hide) the developer switch.
+5. **No crash reports to upstream:** crash reporting is switched off for good; the onboarding step and the
+   Settings toggle are gone.
+
+**Release:** versionName `1.0.0-alpha1` (`abcdVersion` in gradle.properties); signed, R8-shrunk release APK with
+the keystore outside the repo (`C:\ABCD\keystore\`, env vars `KEYSTORE_PATH`/`KEYSTORE_PASSWORD`/`KEY_ALIAS`/
+`KEY_PASSWORD`). Back the keystore up.
+
+**Still open (v1.0 final):** the 1-2 hour party checklist on a real phone (screen off, call, Bluetooth, Android
+Auto, low battery); update checker for abcd's own releases (endpoint: ask first); About/Discord links; CI on
+`main`; Room migration policy before any `abcd_dj.db` schema change; `ktlint --format` pass.
+
+### Original stage 12 plan
 
 - **Party checklist** on the phone: 1-2 h session with screen off, other apps, a phone call, Bluetooth
   speaker, Android Auto/car, low battery; memory and battery over the session; fix reported bugs one by one.

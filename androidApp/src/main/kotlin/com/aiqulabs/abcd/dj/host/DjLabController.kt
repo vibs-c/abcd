@@ -1,5 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
+import com.aiqulabs.abcd.dj.core.tagging.TagType
+import com.aiqulabs.abcd.dj.core.analysis.StoredAnalysis
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -196,12 +198,50 @@ object DjLabController {
     }
 
     fun open(videoId: String) {
-        val repository = repository(attachedTo ?: return)
+        val context = attachedTo ?: return
+        val repository = repository(context)
         scope.launch {
             val stored = repository.load(videoId) ?: return@launch
             val (title, artists) = describe(videoId)
-            mutableState.update { it.copy(detail = LabDetail(videoId, title, artists, stored)) }
+            mutableState.update { it.copy(detail = detailOf(context, videoId, title, artists, stored)) }
         }
+    }
+
+    /** The user's own [type] tags (Lab "Song details", stage 12); empty goes back to the automatic ones. */
+    fun setTags(
+        videoId: String,
+        type: TagType,
+        values: List<String>,
+    ) {
+        val context = attachedTo ?: return
+        scope.launch {
+            DjData.feedbackRepository(context).setUserTags(videoId, type, values)
+            Timber.tag(TAG).i("%s: %s set by the user to %s", videoId, type, values.ifEmpty { listOf("automatic") })
+            val current = mutableState.value.detail?.takeIf { it.videoId == videoId } ?: return@launch
+            mutableState.update { it.copy(detail = detailOf(context, videoId, current.title, current.artists, current.stored)) }
+        }
+    }
+
+    /** The detail page with everything the DJ database holds for the song. */
+    private suspend fun detailOf(
+        context: Context,
+        videoId: String,
+        title: String,
+        artists: String,
+        stored: StoredAnalysis,
+    ): LabDetail {
+        val feedback = DjData.feedbackRepository(context)
+        val tags = feedback.storedTags(videoId)
+        val saved =
+            DjLabSavedData.groups(
+                videoId = videoId,
+                meta = repository(context).trackInfo(videoId),
+                stored = stored,
+                tags = tags,
+                feedback = feedback.trackFeedback(videoId),
+                transitions = feedback.transitionsWith(videoId),
+            )
+        return LabDetail(videoId, title, artists, stored, tags, saved)
     }
 
     fun closeDetail() = mutableState.update { it.copy(detail = null) }
@@ -294,10 +334,11 @@ object DjLabController {
         val withLyrics = song?.let { DjLyrics.rankChoruses(it, result) }
         val ranked = withLyrics?.result ?: result
         repository.save(videoId, ranked, track)
-        DjTags.save(DjData.feedbackRepository(context), track, ranked, withLyrics?.lyricsText)
+        DjTags.save(DjData.feedbackRepository(context), track, ranked, withLyrics?.lyricsText, lyricsLookedUp = song != null)
 
         val stored = checkNotNull(repository.load(videoId))
-        mutableState.update { it.copy(busy = null, detail = LabDetail(videoId, title, artists, stored)) }
+        val detail = detailOf(context, videoId, title, artists, stored)
+        mutableState.update { it.copy(busy = null, detail = detail) }
         refreshLocalSongs()
     }
 

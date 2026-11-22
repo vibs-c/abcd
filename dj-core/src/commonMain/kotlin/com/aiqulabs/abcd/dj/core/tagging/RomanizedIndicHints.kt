@@ -46,7 +46,7 @@ object RomanizedIndicHints {
 
     private fun textOf(track: DjTrack): String = listOfNotNull(track.title, track.album).joinToString(" ")
 
-    private fun wordsIn(text: String): Set<String> =
+    internal fun wordsIn(text: String): Set<String> =
         text
             .lowercase()
             .split(Regex("[^\\p{L}]+"))
@@ -71,7 +71,7 @@ object RomanizedIndicHints {
     const val WORDS_CONFIDENCE = 0.65f
 
     /** Distinctive Hindi/Urdu words common in song titles; none is an ordinary English word. */
-    private val HINDI_WORDS =
+    internal val HINDI_WORDS =
         setOf(
             "dil", "pyaar", "pyar", "ishq", "mohabbat", "tera", "teri", "tere", "mera", "meri", "mere", "tum", "tujhe",
             "mujhe", "hai", "hain", "nahi", "nahin", "kya", "kyun", "yeh", "woh", "jaana", "jaane", "sajna", "sajni",
@@ -84,7 +84,7 @@ object RomanizedIndicHints {
         )
 
     /** Distinctive Punjabi words. */
-    private val PUNJABI_WORDS =
+    internal val PUNJABI_WORDS =
         setOf("kudi", "kudiyan", "munda", "mundeya", "jatt", "jatti", "gallan", "putt", "tusi", "assi", "kithe", "balle", "sohni", "yaariyan")
 
     /** Well-known Indian singers and composers (full or distinctive names). */
@@ -98,9 +98,21 @@ object RomanizedIndicHints {
             "sid sriram", "karan aujla", "ap dhillon", "sidhu moose wala", "harrdy sandhu", "jasleen royal",
             "vishal mishra", "amit trivedi", "salim-sulaiman", "himesh reshammiya", "javed ali",
             "yuvan shankar raja", "devi sri prasad", "thaman", "ilaiyaraaja", "shilpa rao", "sunidhi", "palak muchhal",
+            // Stage 12 (owner report: Hindi songs in an English mix).
+            "vishal dadlani", "benny dayal", "raftaar", "emiway bantai", "jasmine sandlas", "dhvani bhanushali",
+            "asees kaur", "tulsi kumar", "millind gaba", "parmish verma", "ammy virk", "jassie gill", "gippy grewal",
+            "sharry mann", "mankirt aulakh", "shalmali kholgade", "neeti mohan", "monali thakur", "kanika kapoor",
+            "papon", "lucky ali", "ankit tiwari", "mithoon", "sajid-wajid", "shankar-ehsaan-loy", "yasser desai",
+            "raj shekhar", "stebin ben", "anu malik", "nadeem-shravan", "jatin-lalit", "kailash kher", "meet bros",
+            "sachin-jigar", "amaal mallik", "akhil sachdeva", "payal dev", "harshdeep kaur", "nikhita gandhi",
+            "rashmeet kaur", "zaeden", "mc stan", "krsna", "seedhe maut", "hanumankind", "yo yo honey singh",
         )
 
     /** Name parts that are near-certainly Indian. */
     private val INDIAN_NAME_TOKENS =
-        setOf("singh", "kumar", "sharma", "kapoor", "chauhan", "ghoshal", "kakkar", "dosanjh", "randhawa", "nautiyal", "bhosle", "mangeshkar", "yagnik", "rahman", "raval", "aujla", "dhillon", "sandhu", "sriram")
+        setOf(
+            "singh", "kumar", "sharma", "kapoor", "chauhan", "ghoshal", "kakkar", "dosanjh", "randhawa", "nautiyal", "bhosle",
+            "mangeshkar", "yagnik", "rahman", "raval", "aujla", "dhillon", "sandhu", "sriram", "kaur", "bhanushali",
+            "dadlani", "kholgade", "virk", "grewal", "aulakh", "reshammiya", "mallik", "sachdeva",
+        )
 }

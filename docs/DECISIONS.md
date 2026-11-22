@@ -559,6 +559,39 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
   in Metrolist's listening history / scrobbles (not recorded there now). §5.1 "a song added to the queue is
   analysed at once": v1's queue has no "add" (remove and reorder only), so nothing to do yet.
 
+## 2026-11-22 · Stage 12: alpha polish (owner's five points) and release build
+
+- **Stage 11 (chorus editor) moved to v2** at the owner's request; v1 keeps automatic chorus detection.
+- **Language (owner: "Hindi songs play during English-only selection"):** the leaks were Hindi film/pop songs
+  with English-looking titles by singers the hint list did not know, and nothing looked at lyrics when the mix was
+  built. Now: `LanguageGate` is the one rule (USER tags final; otherwise a non-chosen language with confidence
+  ≥ 0.6 that is at least as strong as any chosen one rejects; with no Indian language chosen, title hints and
+  "singer already seen with an Indian song in this mix" reject too). `LyricsLanguage` tags lyrics (Devanagari →
+  Hindi 0.9; ≥ 4 distinct Hindi words → Hindi 0.85; English only with ≥ 8 common English words, weak 0.4 when
+  Hindi is also present), stored with the new source `LYRICS`; songs analysed before this get their lyrics looked
+  up once (`LANGUAGE = UNKNOWN`, confidence 0, marks "checked, none found"). The builder reads stored tags
+  (`StoredTagTagger`), and `DjController` checks again after preparation. New tag type `VIBE`, genre guesses
+  (`GenreTagger`); no schema change (tag type and source are text).
+- **Lab:** "Song details" (language, type, mood, vibe; edit → USER tags, "Automatic" removes them) and "Saved in
+  the database" (track_meta, track_analysis, sections, chorus segments, tags, track feedback, latest transitions).
+- **Volume during blends (owner: "sudden drops and increases"):** cause 1 was the stage 9 curve (cos/sin^0.6):
+  no dip, but the incoming song jumped to -13 dB within the first 5% and the outgoing one fell from -13 dB to
+  silence in the last 5%; cause 2 was two kick drums lining up in a beat-matched blend (+3-4 dB swell, limiter
+  pumping). Now: equal power through a smoothstep (summed power exactly 1, zero slope at both ends) and a bass
+  swap (outgoing keeps the bass, incoming joins without it; they swap over 2 beats at the middle, which is a bar
+  line), done in `DeckGainProcessor` with a 180 Hz low-pass subtracted and a 20 ms glide. Echo out: the dry
+  signal eases out over a beat. Boost for quiet songs capped at +4 dB (was +12) so the limiter rarely works.
+  This brings a v2 idea (bass swap) inside v1's beat-matched blend; it is not a separate technique.
+- **Live timeline:** `DjMixEngine.progress()` (position, duration, the planned or running mix window on the
+  playing song's clock), read every 50 ms by the live screen and the mini bar.
+- **Lab switch:** hidden until the "Start a mix" title is tapped 7 times within 1.5 s gaps (toggles; hiding also
+  switches the Lab off).
+- **Crash reports:** `isCrashReportingAvailable()` is always false: no onboarding step, no Settings toggle, Sentry
+  never initialised (manifest auto-init already off). Upstream's Sentry project is not abcd's.
+- **Release:** `abcdVersion=1.0.0-alpha1` → versionName; `appVersion` stays 14.0.0 because Listen Together sends
+  it to upstream's server. Release keystore generated at `C:\ABCD\keystore\` (outside the repo; password in
+  the text file next to it); NativeEcho added to dj-native's consumer R8 rules.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

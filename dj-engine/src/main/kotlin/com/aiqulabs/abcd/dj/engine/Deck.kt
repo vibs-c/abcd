@@ -86,6 +86,7 @@ internal class Deck(
         trackIndex = index
         gain.setTrimDb(DeckGainProcessor.trimDbFor(track.analysis.lufs))
         gain.resetEcho()
+        gain.setBass(1f)
         player.playWhenReady = false
         player.volume = 0f
         setSpeed(speed)
@@ -100,9 +101,13 @@ internal class Deck(
 
     fun setEcho(params: DeckGainProcessor.EchoParams) = gain.setEcho(params)
 
+    /** Bass level 0..1 (bass swap in a beat-matched blend, stage 12); 1 is the song as mastered. */
+    fun setBass(level: Float) = gain.setBass(level)
+
     /** Stops and empties the deck so it can take the next track; the ExoPlayer itself is kept. */
     fun clear() {
         gain.resetEcho()
+        gain.setBass(1f)
         setSpeed(1f)
         track = null
         trackIndex = -1

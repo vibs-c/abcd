@@ -28,7 +28,15 @@ class DjSetupStore(
             preferences.edit().putBoolean(KEY_LAB, value).apply()
         }
 
+    /** Whether the developer switch is shown (7 taps on the setup title). Hidden on a fresh install. */
+    var labUnlocked: Boolean
+        get() = preferences.getBoolean(KEY_LAB_UNLOCKED, false)
+        set(value) {
+            preferences.edit().putBoolean(KEY_LAB_UNLOCKED, value).apply()
+        }
+
     private companion object {
+        const val KEY_LAB_UNLOCKED = "lab_unlocked"
         const val FILE_NAME = "abcd_dj_setup"
         const val KEY_DRAFT = "draft"
         const val KEY_LAB = "lab_enabled"

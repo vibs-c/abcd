@@ -5585,6 +5585,26 @@
 
     <!-- abcd DJ Mode: live screen, thumbs and queue (stage 10) -->
     <string name="dj_live_show_mix">Show mix</string>
+    <string name="dj_lab_unlocked">Developer options are now shown</string>
+    <string name="dj_timeline_mix_in">Mix in %1$s · %2$d bars</string>
+    <string name="dj_timeline_mixing">Blending · %1$d%</string>
+    <string name="dj_timeline_planning">Lining up the next song…</string>
+    <string name="dj_timeline_mix_label">MIX</string>
+    <string name="dj_lab_details_title">Song details</string>
+    <string name="dj_lab_details_hint">What the DJ knows about this song. Your corrections always win, including which mixes it can join.</string>
+    <string name="dj_lab_details_language">Language</string>
+    <string name="dj_lab_details_genre">Type</string>
+    <string name="dj_lab_details_mood">Mood</string>
+    <string name="dj_lab_details_vibe">Vibe</string>
+    <string name="dj_lab_details_none">Not known yet</string>
+    <string name="dj_lab_details_user">Set by you</string>
+    <string name="dj_lab_details_auto">Automatic (%1$s)</string>
+    <string name="dj_lab_details_edit">Edit</string>
+    <string name="dj_lab_details_save">Save</string>
+    <string name="dj_lab_details_automatic">Automatic</string>
+    <string name="dj_lab_details_cancel">Cancel</string>
+    <string name="dj_lab_saved_title">Saved in the database</string>
+    <string name="dj_lab_hidden">Developer options are hidden</string>
     <string name="dj_live_new_mix">Set up a new mix</string>
     <string name="dj_live_up_next">Up next</string>
     <string name="dj_live_queue">Coming up (%1$d)</string>

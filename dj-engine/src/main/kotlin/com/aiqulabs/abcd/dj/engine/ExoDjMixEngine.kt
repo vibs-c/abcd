@@ -72,6 +72,9 @@ class ExoDjMixEngine(
     private var masterGain = 1f
     private var skipRequested = false
     private var pendingQueue: List<String>? = null
+
+    /** The planned transition's window on the playing song (start, end), recomputed every tick (stage 12). */
+    private var plannedWindow: Pair<Long, Long>? = null
     private var ending = false
     private var released = false
     private var audioSessionId = AudioManager.AUDIO_SESSION_ID_GENERATE
@@ -222,6 +225,33 @@ class ExoDjMixEngine(
         releaseAll()
     }
 
+    override fun progress(): DjProgress? {
+        val d = decks ?: return null
+        val deck = d[main]
+        val track = deck.track ?: return null
+        val running = transition
+        val window = if (running != null) mixWindow(running.plan, running.exitMs) else plannedWindow
+        return DjProgress(
+            videoId = track.track.videoId,
+            positionMs = deck.positionMs,
+            durationMs = deck.durationMs,
+            mixStartMs = window?.first,
+            mixEndMs = window?.second,
+            mixing = running != null,
+        )
+    }
+
+    /** The audible part of a transition on the outgoing song's clock: echo outs start with the echo build-up. */
+    private fun mixWindow(
+        plan: TransitionPlan,
+        exitMs: Long,
+    ): Pair<Long, Long> =
+        if (plan.isEchoOut) {
+            (exitMs - plan.echoLeadMs) to (exitMs + maxOf(plan.fadeMs, plan.echoDelayMs * ECHO_TAIL_BEATS))
+        } else {
+            exitMs to (exitMs + plan.fadeMs)
+        }
+
     // ---- what the session player reads ----------------------------------------------------------------
 
     internal fun mainPositionMs(): Long = decks?.get(main)?.positionMs ?: 0L
@@ -265,6 +295,7 @@ class ExoDjMixEngine(
                     plan.isEchoOut -> exit - plan.echoLeadMs
                     else -> exit
                 }
+            plannedWindow = mixWindow(plan, exit)
             if (m.hasEnded) {
                 val cut = plan.copy(technique = TransitionTechnique.CLASSIC_FADE, fadeMs = 0L, reason = plan.reason + " (outgoing ended early)")
                 begin(cut, m.positionMs)
@@ -308,6 +339,7 @@ class ExoDjMixEngine(
         val d = decks ?: return
         val running = transition ?: return
         transition = null
+        plannedWindow = null
         val from = d[running.from]
         val finished = from.track
         if (running.plan.isBeatmatched) {
@@ -386,6 +418,7 @@ class ExoDjMixEngine(
         val head = tracks.take(currentIndex + 1)
         val rest = tracks.drop(currentIndex + 1).filterIndexed { i, _ -> (currentIndex + 1 + i) !in unplayable }
         val byId = rest.associateBy { it.track.videoId }
+        plannedWindow = null
         val loadedNext = d[1 - main].track?.track?.videoId
         tracks = head + upcomingVideoIds.mapNotNull(byId::get)
         unplayable.removeAll { it > currentIndex }
@@ -527,7 +560,16 @@ class ExoDjMixEngine(
         val progress = if (plan.fadeMs <= 0) 1.0 else (t.toDouble() / plan.fadeMs).coerceIn(0.0, 1.0)
         from.player.volume = CrossfadeCurve.outgoing(progress) * level
         to.player.volume = CrossfadeCurve.incoming(progress) * level
-        return progress >= 1.0 || to.hasEnded
+        if (plan.isBeatmatched && plan.fadeMs > 0) {
+            // Bass swap (stage 12): one bassline at a time, handed over in the middle of the blend.
+            val beat = from.track?.analysis?.let(BEAT_GRID::beatMs) ?: DEFAULT_BEAT_MS
+            val width = CrossfadeCurve.BASS_SWAP_BEATS * beat.toDouble() / plan.fadeMs
+            from.setBass(CrossfadeCurve.outgoingBass(progress, width))
+            to.setBass(CrossfadeCurve.incomingBass(progress, width))
+        }
+        val done = progress >= 1.0 || to.hasEnded
+        if (done) to.setBass(1f)
+        return done
     }
 
     /**
@@ -555,7 +597,8 @@ class ExoDjMixEngine(
             to.player.playWhenReady = shouldPlay()
             running.incomingStarted = true
         }
-        val dry = (1f - t.toFloat() / beat).coerceIn(0f, 1f)
+        // The dry signal eases out over one beat (smooth ends: no click, no sudden hole).
+        val dry = CrossfadeCurve.outgoing(t.toDouble() / beat)
         val send = if (t < beat) ECHO_SEND * dry else 0f
         from.setEcho(DeckGainProcessor.EchoParams(beat, send, ECHO_TAIL_FEEDBACK, dry = dry, wet = 1f))
         val fadeIn = if (plan.fadeMs <= 0) 1.0 else (t.toDouble() / plan.fadeMs).coerceIn(0.0, 1.0)
@@ -670,6 +713,8 @@ class ExoDjMixEngine(
     private companion object {
         const val TAG = "DjMixEngine"
         const val TICK_MS = 40L
+        const val DEFAULT_BEAT_MS = 500L
+        val BEAT_GRID = MixPlanner()
         const val FADE_STEP_MS = 30L
         const val DUCK_GAIN = 0.2f
         const val CUE_TOLERANCE_MS = 80L

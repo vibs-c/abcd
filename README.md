@@ -34,7 +34,7 @@ Built for house parties and road trips, India first: Hindi, English, Punjabi, Ta
 
 | Technique | When abcd uses it |
 |---|---|
-| **Beat-matched blend** | Both songs have a clear beat and their tempos are within about 6% (half- or double-time counts). The incoming song is time-stretched, phase-locked to the beat and faded in over 8 to 16 bars. The blend is shorter when the keys clash. |
+| **Beat-matched blend** | Both songs have a clear beat and their tempos are within about 6% (half- or double-time counts). The incoming song is time-stretched, phase-locked to the beat and faded in over 8 to 16 bars; the two basslines swap in the middle so the kicks never double up. The blend is shorter when the keys clash. |
 | **Echo out** | The tempos are too far apart to blend. The outgoing song echoes out on the beat and the next song drops in on its downbeat. |
 | **Classic fade** | Neither of the above is possible, for example when there is no usable beat grid. |
 
@@ -43,6 +43,8 @@ Built for house parties and road trips, India first: Hindi, English, Punjabi, Ta
 - Now playing and up next, with artwork, on the **live screen** and in a **mini bar** on every tab.
 - **Thumbs up / down** on the transition that just happened.
 - **Edit the queue:** move songs up or down, remove a song, or mark it "never play".
+- A **timeline** of the playing song: its waveform, where the next mix will happen, a countdown and a
+  beat pulse.
 - Play/pause, Next and End session, including from the notification and the lock screen.
 - **abcd learns from you.** Banned songs never come back, songs you often remove or skip sink, and
   song pairs and transition styles you liked are chosen more often. Everything stays on your phone.
@@ -87,7 +89,8 @@ flowchart TD
 
 1. **Build.** The playlist builder asks YouTube Music for candidates and keeps only songs that match your
    languages. It uses script detection (Devanagari, Gurmukhi, Tamil and more), Hindi and Punjabi words in
-   Latin-script titles, and artist hints. It drops podcasts, very long tracks and banned songs.
+   Latin-script titles, and artist hints, and checks again against the lyrics after analysis. It drops
+   podcasts, very long tracks and banned songs. Your own corrections in the Lab always win.
 2. **Prepare.** Every song is analysed **before** it plays. The audio is decoded in-app and passed to a
    native C++ analyser built on [Essentia](https://essentia.upf.edu/). Results are saved in abcd's own
    database, so a song is analysed only once. Your second mix starts much faster than your first.
@@ -122,9 +125,10 @@ engine design ([`DJ_ENGINE_DESIGN.md`](docs/DJ_ENGINE_DESIGN.md)), the build pla
 
 ## Status
 
-abcd is **in development**, Android only, and distributed as an APK. Stages 1 to 10 of the 12-stage
-plan are built: analysis, the two-deck engine, beat-matched and echo transitions, the live screen and
-learning from feedback. Next come a chorus editor and final polish. See [`docs/STAGES.md`](docs/STAGES.md).
+abcd is in **alpha** (`1.0.0-alpha1`), Android only, and distributed as an APK. v1 is complete:
+analysis, the two-deck engine, beat-matched and echo transitions with a bass swap, the live screen with
+its timeline, and learning from feedback. A chorus editor is planned for v2. See
+[`docs/STAGES.md`](docs/STAGES.md).
 
 ## Build it yourself
 
@@ -143,8 +147,8 @@ decoder is built for it too.
 
 ## Privacy
 
-- No analytics and no telemetry in DJ Mode. Analysis results, tags and feedback stay in a database on
-  your phone.
+- No analytics, no telemetry and no crash reports. Analysis results, tags and feedback stay in a database
+  on your phone.
 - abcd talks to YouTube Music the same way the underlying app already does. DJ Mode adds no new servers
   or endpoints.
 

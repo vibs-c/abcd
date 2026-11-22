@@ -45,6 +45,39 @@ internal object DjLyrics {
         }
     }
 
+    /**
+     * The lyric text of [song] for its language (stage 12): "" when it has no lyrics, null when the lookup timed
+     * out or failed (so it is tried again another time).
+     */
+    suspend fun textFor(song: SongItem): String? =
+        try {
+            val repository = KoinPlatform.getKoinOrNull()?.getOrNull<LyricsRepository>()
+            if (repository == null) {
+                null
+            } else {
+                val found =
+                    withTimeoutOrNull(TIMEOUT_MS) {
+                        repository.getLyrics(
+                            videoId = song.id,
+                            title = song.title,
+                            artist = song.artists.joinToString(", ") { it.name },
+                            duration = song.duration,
+                            album = song.album?.name,
+                        )
+                    }
+                when {
+                    found == null -> null
+                    found.lyrics == null -> ""
+                    else -> LyricsUtils.parseLyrics(checkNotNull(found.lyrics)).filter { it.text.isNotBlank() }.joinToString("\n") { it.text }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).d(e, "Lyrics lookup failed for %s", song.id)
+            null
+        }
+
     private suspend fun linesFor(song: SongItem): List<LyricLine> =
         try {
             val repository = KoinPlatform.getKoinOrNull()?.getOrNull<LyricsRepository>() ?: return emptyList()

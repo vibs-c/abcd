@@ -5,6 +5,7 @@ import com.aiqulabs.abcd.dj.core.feedback.TransitionOutcome
 import com.aiqulabs.abcd.dj.core.mix.TransitionTechnique
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.tagging.TagSource
+import com.aiqulabs.abcd.dj.core.tagging.TagType
 import com.aiqulabs.abcd.dj.core.tagging.TrackTagValue
 import com.aiqulabs.abcd.dj.data.db.DjDao
 import com.aiqulabs.abcd.dj.data.db.DjSessionEntity
@@ -103,6 +104,35 @@ class DjFeedbackRepository(
     )
 
     suspend fun tags(videoId: String) = dao.tags(videoId)
+
+    /** Every stored tag of [videoId] as the DJ brain sees it (unknown types or sources are skipped). */
+    suspend fun storedTags(videoId: String): List<TrackTagValue> {
+        val types = TagType.entries.associateBy { it.name }
+        val sources = TagSource.entries.associateBy { it.name }
+        return dao.tags(videoId).mapNotNull { row ->
+            val type = types[row.tagType] ?: return@mapNotNull null
+            val source = sources[row.source] ?: return@mapNotNull null
+            TrackTagValue(type, row.value, source, row.confidence.toFloat())
+        }
+    }
+
+    /** The user's own [type] tags for [videoId] (Lab, stage 12); they replace every automatic tag of that type. */
+    suspend fun setUserTags(
+        videoId: String,
+        type: TagType,
+        values: List<String>,
+    ) = dao.replaceUserTags(
+        videoId,
+        type.name,
+        values.distinct().map { TrackTagEntity(videoId, type.name, it, TagSource.USER.name, 1.0) },
+    )
+
+    suspend fun trackFeedback(videoId: String) = dao.trackFeedback(videoId)
+
+    suspend fun transitionsWith(
+        videoId: String,
+        limit: Int = 20,
+    ) = dao.transitionsWith(videoId, limit)
 
     // ---- what the DJ reads ----------------------------------------------------------------------------
 

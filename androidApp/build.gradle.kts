@@ -145,6 +145,8 @@ java {
 
 val sentryAuthToken = providers.environmentVariable("SENTRY_AUTH_TOKEN").filter(String::isNotBlank)
 val appVersion = providers.gradleProperty("appVersion").get()
+// abcd: its own version name; appVersion stays upstream's (Listen Together sends it to its server).
+val abcdVersion = providers.gradleProperty("abcdVersion").getOrElse(appVersion)
 val bundledLanguageTags =
     rootProject
         .file("shared/src/commonMain/composeResources")
@@ -208,7 +210,7 @@ android {
         minSdk = 24
         targetSdk = 37
         versionCode = 154
-        versionName = appVersion
+        versionName = abcdVersion
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

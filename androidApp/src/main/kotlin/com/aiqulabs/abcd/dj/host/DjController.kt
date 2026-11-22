@@ -10,7 +10,10 @@ import com.aiqulabs.abcd.dj.core.mix.MixPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
 import com.aiqulabs.abcd.dj.core.prep.SessionPreparer
+import com.aiqulabs.abcd.dj.core.brain.LanguageGate
 import com.aiqulabs.abcd.dj.core.tagging.MetadataTrackTagger
+import com.aiqulabs.abcd.dj.core.tagging.StoredTagTagger
+import com.aiqulabs.abcd.dj.core.tagging.TagType
 import com.aiqulabs.abcd.dj.data.DjData
 import com.aiqulabs.abcd.dj.ui.setup.DjStartState
 import com.metrolist.android.playback.PlayerConnection
@@ -103,7 +106,10 @@ object DjController {
                 Timber.tag(TAG).w(e, "Could not read feedback; mixing without it")
                 FeedbackSnapshot.EMPTY
             }
-        val built = DjPlaylistBuilder(source, MetadataTrackTagger()).build(settings, bannedVideoIds = feedback.banned)
+        val feedbackStore = DjData.feedbackRepository(context)
+        // Title tags plus what earlier analyses learnt (lyrics language) and the user's own corrections (stage 12).
+        val tagger = StoredTagTagger(MetadataTrackTagger()) { id -> runCatching { feedbackStore.storedTags(id) }.getOrDefault(emptyList()) }
+        val built = DjPlaylistBuilder(source, tagger).build(settings, bannedVideoIds = feedback.banned)
         val playableIds =
             BlockedContent
                 .filterPlayableSongs(
@@ -154,7 +160,13 @@ object DjController {
             return DjStartState.Failed(reason, foundCount = prepared.tracks.size, detail = prepared.lastFailureReason)
         }
 
-        val ordered = PlaylistOrderer(feedback = feedback).order(prepared.tracks, plan.settings)
+        // Second language check, now that every song's lyrics have been looked at (owner report: Hindi songs in an
+        // English-only mix had English-looking titles). A song in a language that was not chosen is dropped.
+        val fitting = dropWrongLanguage(prepared.tracks, plan.settings, tagger)
+        if (fitting.size < MIN_PLAYABLE_TRACKS) {
+            return DjStartState.Failed(DjStartState.Reason.NOT_ENOUGH_SONGS, foundCount = fitting.size)
+        }
+        val ordered = PlaylistOrderer(feedback = feedback).order(fitting, plan.settings)
         logOrder(ordered)
         // Stage 8: the mix plays through the DJ engine (its own two decks), not Metrolist's queue.
         val songs = ordered.mapNotNull { t -> source.songFor(t.track.videoId)?.let { t.track.videoId to it } }.toMap()
@@ -178,6 +190,27 @@ object DjController {
             }
         if (!started) return DjStartState.Failed(DjStartState.Reason.ERROR)
         return DjStartState.Started(playable.size)
+    }
+
+    /** Drops prepared songs whose stored or lyrics language was not chosen; their singers' other songs go too. */
+    private suspend fun dropWrongLanguage(
+        tracks: List<PreparedTrack>,
+        settings: DjSessionSettings,
+        tagger: StoredTagTagger,
+    ): List<PreparedTrack> {
+        if (settings.anyLanguage) return tracks
+        val tags = tracks.associate { it.track.videoId to tagger.tag(it.track) }
+        val rejected = tracks.filterNot { LanguageGate.allows(it.track, tags.getValue(it.track.videoId), settings) }
+        val indianSingers = rejected.mapNotNull { it.track.artistKeys.singleOrNull() }.toSet()
+        val kept =
+            tracks.filter { t ->
+                t !in rejected && LanguageGate.allows(t.track, tags.getValue(t.track.videoId), settings, indianArtist = t.track.artistKeys.any { it in indianSingers })
+            }
+        (tracks - kept.toSet()).forEach { t ->
+            val languages = tags.getValue(t.track.videoId).filter { it.type == TagType.LANGUAGE && it.confidence > 0f }
+            Timber.tag(TAG).i("Left out %s (%s): language %s", t.track.title, t.track.artists.joinToString(), languages.joinToString { "${it.value}/${it.source}" })
+        }
+        return kept
     }
 
     /** One line per track so the chosen order can be checked in the log (BPM, key, energy). */
