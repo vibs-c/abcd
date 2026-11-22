@@ -1,5 +1,6 @@
 package com.aiqulabs.abcd.dj.ui.lab
 
+import com.aiqulabs.abcd.dj.core.mix.TransitionTechnique
 import com.aiqulabs.abcd.dj.core.analysis.DjDatabaseCounts
 import com.aiqulabs.abcd.dj.core.analysis.StoredAnalysis
 import com.aiqulabs.abcd.dj.core.analysis.TrackSummary
@@ -70,4 +71,7 @@ data class LabActions(
     val onBack: () -> Unit,
     /** Copies the recent DJ log (failures and their reasons) for a bug report. */
     val onCopyLog: () -> Unit = {},
+    /** Audition [fromId] into [toId] with a technique (null = automatic), brief §4.5. */
+    val onAudition: (fromId: String, toId: String, technique: TransitionTechnique?) -> Unit = { _, _, _ -> },
+    val onStopAudition: () -> Unit = {},
 )

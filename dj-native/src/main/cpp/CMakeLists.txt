@@ -61,6 +61,7 @@ add_library(abcd_analysis STATIC
     core/abcd_analysis.cpp
     core/analyzer.cpp
     core/dsp.cpp
+    core/echo.cpp
     core/json_writer.cpp
     core/structure.cpp)
 target_include_directories(abcd_analysis PUBLIC core)

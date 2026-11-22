@@ -9,7 +9,8 @@ package com.aiqulabs.abcd.dj.core.brain
  */
 data class ScoringConfig(
     val vibeWeight: Double = 0.0,
-    val bpmWeight: Double = 1.0,
+    /** Highest weight: neighbours within ±6% can be beatmatched, which makes the transition seamless (stage 9). */
+    val bpmWeight: Double = 1.6,
     val keyWeight: Double = 0.8,
     val energyWeight: Double = 1.2,
     val freshnessWeight: Double = 0.0,
@@ -19,10 +20,12 @@ data class ScoringConfig(
     val artistSpacing: Int = 3,
     /** A BPM difference up to this fraction (after half/double-time) is a perfect match: brief says ±6%. */
     val idealBpmDifference: Double = 0.06,
-    /** From this fraction up, the BPM score is 0. */
-    val maxBpmDifference: Double = 0.25,
-    /** Below this confidence a BPM or key is not trusted and scores neutral. */
+    /** From this fraction up, the BPM score is 0 (beyond beatmatching range the gap size hardly matters). */
+    val maxBpmDifference: Double = 0.12,
+    /** Below this confidence a key is not trusted and scores neutral. */
     val minTrustedConfidence: Double = 0.5,
+    /** Below this BPM confidence the tempo scores neutral; same threshold as the beatmatch decision (`MixPlanner`). */
+    val minTrustedBpmConfidence: Double = 0.25,
     /** Score given when tempo or key is not trusted: neither a reward nor a penalty. */
     val neutralScore: Double = 0.5,
 )

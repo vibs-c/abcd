@@ -5550,6 +5550,19 @@
     <!-- abcd DJ Mode: technical failure reason, shown small for bug reports -->
     <string name="dj_failure_detail">Reason: %1$s</string>
 
+    <!-- abcd DJ Mode: Lab, audition a transition (stage 9) -->
+    <string name="dj_audition_title">Audition a transition</string>
+    <string name="dj_audition_desc">Pick two analysed songs and a technique. The first song starts just before the blend.</string>
+    <string name="dj_audition_from">From</string>
+    <string name="dj_audition_to">Into</string>
+    <string name="dj_audition_pick">choose a song</string>
+    <string name="dj_audition_auto">Automatic</string>
+    <string name="dj_audition_beatmatch">Beatmatched blend</string>
+    <string name="dj_audition_echo">Echo out</string>
+    <string name="dj_audition_classic">Classic fade</string>
+    <string name="dj_audition_play">Play</string>
+    <string name="dj_audition_stop">Stop</string>
+
     <!-- abcd DJ Mode: Lab problem report -->
     <string name="dj_lab_log_title">Problem report</string>
     <string name="dj_lab_log_desc">Copies the recent DJ log (which songs failed and why) so you can paste it into a bug report. Nothing is sent anywhere.</string>

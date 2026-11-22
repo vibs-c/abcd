@@ -115,6 +115,27 @@ class BrainTest {
         }
 
     @Test
+    fun englishOnlyMixDropsHindiSongsWithLatinTitlesButHindiMixKeepsThem() =
+        runTest {
+            val pool =
+                listOf(
+                    track("e1", "I Gotta Feeling", artist = "Black Eyed Peas"),
+                    track("h1", "Shararat (From \"Dhurandhar\")", artist = "Jasmine Sandlas"),
+                    track("e2", "Toxic", artist = "Britney Spears"),
+                    track("h2", "Chikni Chameli", artist = "Shreya Ghoshal"),
+                    track("h3", "Tera Ban Jaunga Meri Jaan", artist = "Some Singer"),
+                    track("e3", "Only Girl (In The World)", artist = "Rihanna"),
+                )
+            val english = DjSessionSettings(languages = setOf(DjLanguage.ENGLISH), mood = DjMood.PARTY, mixStyle = MixStyle.RADIO, sessionLengthMinutes = 15)
+            val englishPlan = DjPlaylistBuilder(FakeSource(SearchQueryBuilder.queries(english).associateWith { pool }), MetadataTrackTagger()).build(english)
+            assertEquals(listOf("e1", "e2", "e3"), englishPlan.tracks.map { it.videoId })
+
+            val hindi = english.copy(languages = setOf(DjLanguage.HINDI))
+            val hindiPlan = DjPlaylistBuilder(FakeSource(SearchQueryBuilder.queries(hindi).associateWith { pool }), MetadataTrackTagger()).build(hindi)
+            assertTrue(hindiPlan.tracks.map { it.videoId }.containsAll(listOf("h1", "h2", "h3")))
+        }
+
+    @Test
     fun interleaveAlternatesLists() {
         assertEquals(listOf(1, 10, 2, 20, 3), interleave(listOf(listOf(1, 2, 3), listOf(10, 20))))
     }

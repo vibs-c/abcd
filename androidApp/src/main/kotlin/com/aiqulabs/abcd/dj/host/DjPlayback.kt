@@ -1,5 +1,7 @@
 package com.aiqulabs.abcd.dj.host
 
+import com.aiqulabs.abcd.dj.core.mix.MixPlanner
+import com.aiqulabs.abcd.dj.core.mix.TransitionPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
 import com.aiqulabs.abcd.dj.engine.DjEngineState
@@ -26,10 +28,11 @@ object DjPlayback {
         tracks: List<PreparedTrack>,
         songs: Map<String, SongItem>,
         settings: DjSessionSettings,
+        planner: TransitionPlanner = MixPlanner(),
     ): Boolean {
         val current = host
         if (current == null) Timber.tag("DjPlayback").w("Music service not running; cannot start DJ Mode")
-        return current?.enter(tracks, songs, settings) ?: false
+        return current?.enter(tracks, songs, settings, planner) ?: false
     }
 
     fun togglePlayPause() {

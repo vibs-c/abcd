@@ -2,7 +2,7 @@ package com.aiqulabs.abcd.dj.engine
 
 import android.net.Uri
 import androidx.media3.common.Player
-import com.aiqulabs.abcd.dj.core.mix.ClassicFadePlanner
+import com.aiqulabs.abcd.dj.core.mix.MixPlanner
 import com.aiqulabs.abcd.dj.core.mix.TransitionPlan
 import com.aiqulabs.abcd.dj.core.mix.TransitionPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
@@ -53,7 +53,7 @@ interface DjMixEngine {
 data class DjMixSession(
     val tracks: List<PreparedTrack>,
     val settings: DjSessionSettings,
-    val planner: TransitionPlanner = ClassicFadePlanner(),
+    val planner: TransitionPlanner = MixPlanner(),
 )
 
 /** Gives the engine a playable local file for a track (stage 6 files); null when it cannot. */

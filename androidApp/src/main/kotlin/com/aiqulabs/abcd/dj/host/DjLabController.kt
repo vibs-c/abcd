@@ -8,6 +8,13 @@ import com.aiqulabs.abcd.dj.analysis.MediaCodecPcmDecoder
 import com.aiqulabs.abcd.dj.analysis.NativeAudioAnalyzer
 import com.aiqulabs.abcd.dj.core.analysis.AudioSource
 import com.aiqulabs.abcd.dj.core.model.DjTrack
+import com.aiqulabs.abcd.dj.core.mix.AuditionPlanner
+import com.aiqulabs.abcd.dj.core.mix.TransitionTechnique
+import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
+import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
+import com.aiqulabs.abcd.dj.data.DjSetupStore
+import com.metrolist.shared.model.AlbumTiny
+import com.metrolist.shared.model.ArtistTiny
 import com.aiqulabs.abcd.dj.data.DjAnalysisRepository
 import com.aiqulabs.abcd.dj.data.DjData
 import com.aiqulabs.abcd.dj.ui.lab.LabBusy
@@ -96,6 +103,62 @@ object DjLabController {
             Timber.tag(TAG).i("DJ log copied: %d lines", report.lines().size)
         }
     }
+
+    /**
+     * "Audition a transition" (brief §4.5): plays [fromId] into [toId] with [technique] (null = automatic choice)
+     * through the real DJ engine, starting just before the blend. [ensureService] makes sure the music service
+     * (where the engine lives) is running.
+     */
+    fun audition(
+        fromId: String,
+        toId: String,
+        technique: TransitionTechnique?,
+        ensureService: suspend () -> Unit,
+    ) {
+        val context = attachedTo ?: return
+        scope.launch {
+            try {
+                val repository = repository(context)
+                val tracks = listOf(fromId, toId).map { id -> preparedTrack(repository, id) ?: error("$id is not analysed") }
+                val songs = tracks.associate { it.track.videoId to songFor(it.track) }
+                val settings = DjSetupStore(context).load().toSettings() ?: DjSessionSettings()
+                withContext(Dispatchers.Main) {
+                    runCatching { ensureService() }
+                    val started = DjPlayback.start(tracks, songs, settings, AuditionPlanner(tracks[1], technique))
+                    if (!started) mutableState.update { it.copy(message = LabMessage.Failed("DJ Mode could not start")) }
+                }
+                Timber.tag(TAG).i("Audition %s -> %s (%s)", fromId, toId, technique ?: "auto")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutableState.update { it.copy(message = LabMessage.Failed(describeFailure(e))) }
+            }
+        }
+    }
+
+    fun stopAudition() = DjPlayback.end()
+
+    private suspend fun preparedTrack(
+        repository: DjAnalysisRepository,
+        videoId: String,
+    ): PreparedTrack? {
+        val stored = repository.load(videoId) ?: return null
+        val song = withContext(Dispatchers.IO) { metrolistDatabase.dao().getSongById(videoId)?.toSongItem() }
+        val track = song?.toDjTrack() ?: repository.trackInfo(videoId) ?: DjTrack(videoId, videoId, emptyList())
+        return PreparedTrack(track, stored.result)
+    }
+
+    /** The song to fetch audio for: Metrolist's own entry when it has one, else one built from the stored name. */
+    private suspend fun songFor(track: DjTrack): SongItem =
+        withContext(Dispatchers.IO) { metrolistDatabase.dao().getSongById(track.videoId)?.toSongItem() }
+            ?: SongItem(
+                id = track.videoId,
+                title = track.title,
+                thumbnail = track.thumbnailUrl,
+                artists = track.artists.map { ArtistTiny(id = null, name = it) },
+                album = track.album?.let { AlbumTiny(id = null, name = it) },
+                duration = track.durationMs?.div(1_000L),
+            )
 
     fun clearAudioFiles() {
         val context = attachedTo ?: return

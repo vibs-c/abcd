@@ -7,6 +7,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -14,6 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
+import kotlin.math.abs
 
 /**
  * One of the engine's two decks: an ExoPlayer that plays a local audio file through [DeckGainProcessor].
@@ -69,24 +71,39 @@ internal class Deck(
     val positionMs: Long get() = player.currentPosition
     val durationMs: Long get() = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: (track?.analysis?.durationMs?.toLong() ?: 0L)
 
-    /** Loads [uri] paused and silent at [startMs]; the engine starts it when its transition begins. */
+    /** Current tempo factor (1.0 = original); changes keep the pitch. */
+    val speed: Float get() = player.playbackParameters.speed
+
+    /** Loads [uri] paused and silent at [startMs] and [speed]; the engine starts it when its transition begins. */
     fun load(
         track: PreparedTrack,
         index: Int,
         uri: Uri,
         startMs: Long,
+        speed: Float = 1f,
     ) {
         this.track = track
         trackIndex = index
         gain.setTrimDb(DeckGainProcessor.trimDbFor(track.analysis.lufs))
+        gain.resetEcho()
         player.playWhenReady = false
         player.volume = 0f
+        setSpeed(speed)
         player.setMediaItem(MediaItem.Builder().setUri(uri).setMediaId(track.track.videoId).build(), startMs)
         player.prepare()
     }
 
+    /** Tempo change with the pitch kept (beatmatching, §9.1). */
+    fun setSpeed(speed: Float) {
+        if (abs(player.playbackParameters.speed - speed) > 1e-4f) player.playbackParameters = PlaybackParameters(speed, 1f)
+    }
+
+    fun setEcho(params: DeckGainProcessor.EchoParams) = gain.setEcho(params)
+
     /** Stops and empties the deck so it can take the next track; the ExoPlayer itself is kept. */
     fun clear() {
+        gain.resetEcho()
+        setSpeed(1f)
         track = null
         trackIndex = -1
         player.playWhenReady = false

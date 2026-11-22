@@ -23,9 +23,15 @@ enum class TransitionTechnique {
 /**
  * How one track hands over to the next, in each track's own media time.
  *
- * The outgoing track starts fading at [outgoingExitMs]; the incoming track starts playing at
- * [incomingEntryMs] at the same moment; the fade lasts [fadeMs]. [reason] is logged (and shown on the v2
- * details page) so every choice can be checked.
+ * The blend starts when the outgoing track reaches [outgoingExitMs]; at that moment the incoming track is at
+ * [incomingEntryMs]; the blend lasts [fadeMs] (outgoing media time). For a beatmatched blend the incoming
+ * track plays at [incomingSpeed] (tempo matched, pitch kept) and is started [preRollMs] early, silent, so its
+ * beats can be pulled into line before it becomes audible. [reason] is logged (and shown on the v2 details
+ * page) so every choice can be checked.
+ *
+ * Echo out: from [echoLeadMs] before the exit an echo of [echoDelayMs] (one beat) builds on the outgoing song;
+ * at the exit its dry signal drops and only the echo tail decays while the incoming song fades in over
+ * [fadeMs] on its downbeat.
  */
 data class TransitionPlan(
     val technique: TransitionTechnique,
@@ -33,7 +39,18 @@ data class TransitionPlan(
     val incomingEntryMs: Long,
     val fadeMs: Long,
     val reason: String,
-)
+    val incomingSpeed: Double = 1.0,
+    val preRollMs: Long = 0L,
+    val echoDelayMs: Long = 0L,
+    val echoLeadMs: Long = 0L,
+) {
+    val isBeatmatched: Boolean get() = technique == TransitionTechnique.BEATMATCHED_BLEND
+
+    val isEchoOut: Boolean get() = technique == TransitionTechnique.ECHO_OUT && echoDelayMs > 0
+
+    /** Where the incoming deck is cued: [preRollMs] of its own (tempo-scaled) time before the entry point. */
+    val incomingCueMs: Long get() = (incomingEntryMs - (preRollMs * incomingSpeed).toLong()).coerceAtLeast(0L)
+}
 
 /** Chooses how to get from one prepared track to the next (brief §9.2, §9.3). Pure logic, no Android. */
 interface TransitionPlanner {

@@ -2,7 +2,10 @@
 // Kept deliberately thin; all logic lives in core/ so other platforms can reuse it.
 #include <jni.h>
 
+#include <algorithm>
+
 #include "../core/abcd_analysis.h"
+#include "../core/echo.h"
 
 namespace {
 
@@ -54,3 +57,36 @@ JNIEXPORT jint JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeAnalyzer_analys
 }
 
 }  // extern "C"
+
+// ---- Echo-out DSP for the DJ decks (brief §9.2). Kotlin: object NativeEcho in dj-native. ----------------
+extern "C" {
+
+JNIEXPORT jlong JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeEcho_nativeCreate(JNIEnv* /*env*/, jobject /*thiz*/, jint sampleRate,
+                                                                                    jint channels) {
+    return reinterpret_cast<jlong>(new abcd::EchoLine(sampleRate, channels));
+}
+
+// Processes `frames` interleaved frames of a direct FloatBuffer in place.
+JNIEXPORT void JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeEcho_nativeProcess(JNIEnv* env, jobject /*thiz*/, jlong handle,
+                                                                                   jobject buffer, jint frames, jint delayFrames,
+                                                                                   jfloat send, jfloat feedback, jfloat dry,
+                                                                                   jfloat wet) {
+    auto* echo = reinterpret_cast<abcd::EchoLine*>(handle);
+    if (echo == nullptr || buffer == nullptr || frames <= 0) return;
+    auto* samples = static_cast<float*>(env->GetDirectBufferAddress(buffer));
+    const jlong capacity = env->GetDirectBufferCapacity(buffer);
+    if (samples == nullptr || capacity < static_cast<jlong>(frames) * echo->channels()) return;
+    echo->process(samples, static_cast<size_t>(frames), static_cast<size_t>(std::max(1, static_cast<int>(delayFrames))), send,
+                  feedback, dry, wet);
+}
+
+JNIEXPORT void JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeEcho_nativeClear(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    if (auto* echo = reinterpret_cast<abcd::EchoLine*>(handle)) echo->clear();
+}
+
+JNIEXPORT void JNICALL Java_com_aiqulabs_abcd_dj_nativelib_NativeEcho_nativeRelease(JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
+    delete reinterpret_cast<abcd::EchoLine*>(handle);
+}
+
+}  // extern "C"
+

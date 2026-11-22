@@ -152,6 +152,10 @@ fun LabScreen(
             }
         }
 
+        if (state.analysed.size >= 2) {
+            item { AuditionCard(state.analysed, actions.onAudition, actions.onStopAudition) }
+        }
+
         item { SectionTitle(stringResource(Res.string.dj_lab_log_title)) }
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

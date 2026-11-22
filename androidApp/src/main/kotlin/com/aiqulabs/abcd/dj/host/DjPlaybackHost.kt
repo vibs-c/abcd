@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import com.aiqulabs.abcd.dj.core.mix.MixPlanner
+import com.aiqulabs.abcd.dj.core.mix.TransitionPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
@@ -106,6 +108,7 @@ internal class DjPlaybackHost(
         tracks: List<PreparedTrack>,
         songs: Map<String, SongItem>,
         settings: DjSessionSettings,
+        planner: TransitionPlanner = MixPlanner(),
     ): Boolean {
         if (tracks.isEmpty() || !ops.canStartDj()) {
             Timber.tag(TAG).w("DJ Mode refused: %d tracks, casting or Listen Together = %s", tracks.size, !ops.canStartDj())
@@ -126,7 +129,7 @@ internal class DjPlaybackHost(
             engine = newEngine
             ops.setSessionPlayer(newEngine.sessionPlayer)
             observe(newEngine)
-            newEngine.start(DjMixSession(tracks, settings))
+            newEngine.start(DjMixSession(tracks, settings, planner))
             Timber.tag(TAG).i("DJ Mode on: %d tracks", tracks.size)
         } finally {
             isEntering = false

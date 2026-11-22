@@ -74,6 +74,10 @@ fun DjTab(modifier: Modifier = Modifier) {
                     onClearAudioFiles = DjLabController::clearAudioFiles,
                     onBack = { labOpen = false },
                     onCopyLog = DjLabController::copyLog,
+                    onAudition = { from, to, technique ->
+                        DjLabController.audition(from, to, technique) { playerConnection?.awaitConnected() }
+                    },
+                    onStopAudition = DjLabController::stopAudition,
                 ),
             modifier = modifier.fillMaxSize(),
             contentPadding = insets,

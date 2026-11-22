@@ -3,6 +3,7 @@ package com.aiqulabs.abcd.dj.core.brain
 import com.aiqulabs.abcd.dj.core.model.DjLanguage
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
+import com.aiqulabs.abcd.dj.core.tagging.RomanizedIndicHints
 import com.aiqulabs.abcd.dj.core.tagging.TagType
 import com.aiqulabs.abcd.dj.core.tagging.TrackTagger
 
@@ -126,6 +127,11 @@ class DjPlaylistBuilder(
         settings: DjSessionSettings,
     ): Boolean {
         if (settings.anyLanguage) return true
+        // No Indian language picked (e.g. English only): Latin-script titles are not enough, because most Hindi
+        // songs have transliterated titles. Drop songs with Indian evidence (film marker, Hindi/Punjabi words,
+        // Indian artists).
+        val indianPicked = settings.languages.any { it != DjLanguage.ENGLISH && it != DjLanguage.ANY }
+        if (!indianPicked && RomanizedIndicHints.indianScore(track) >= STRONG_LANGUAGE_EVIDENCE) return false
         val languageTags = tagger.tag(track).filter { it.type == TagType.LANGUAGE }
         if (languageTags.isEmpty()) return true
         val selected = settings.languages.map(DjLanguage::name).toSet()

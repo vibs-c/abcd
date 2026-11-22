@@ -485,6 +485,42 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
   (stage 12). The owner's 8c feedback (mixing only at song ends, volume dip, audible changes) is stage 9; the
   plan for 9-12 is in STAGES.md.
 
+## 2026-11-22 · Stage 9: mix points, beat-matching, echo out (answers the 8c phone feedback)
+
+- **Mix points by style** (`MixPlanner`, dj-core, unit-tested): Chorus Hits leaves after the main chorus (or
+  the chorus right after it while the song is still short) and enters 8 bars before the next song's main
+  chorus; Smooth leaves after the last chorus (else the mixable outro); Radio at the mixable outro. Always on a
+  bar line, at least 25 s per song, and the whole transition ends before the song's last 1.5 s.
+- **Technique selector** (§9.2): beatmatched blend when both grids are trusted (BPM confidence ≥ 0.25) and
+  tempos are within ±6% (half/double allowed), 8 bars (16 in Smooth), halved when the keys clash (Camelot ≥ 3
+  steps); echo out when the outgoing song has a bar grid but tempos clash or grids are untrusted; classic fade
+  only without a grid. The reason is logged with every transition.
+- **No dip:** `CrossfadeCurve` raises equal power with an exponent of 0.6 (summed power ≥ 1, ~+1.2 dB at the
+  midpoint) instead of cos/sin, so the blend never sags; decks keep 2 dB headroom + the limiter.
+- **Beat sync** (§9.1): the incoming deck is cued two beats early at the matched tempo (`PlaybackParameters`,
+  pitch kept), silent; every 40 ms the engine compares both decks' positions (each from its own audio clock)
+  and nudges the incoming speed by up to ±3% (≤ every 120 ms); one re-seek if > 250 ms off while silent. The
+  phase error when the blend opens and at its end is logged. Afterwards the tempo glides back to 1.0 (0.015%
+  per 40 ms tick ≈ 6% in 16 s). Brief wording "AudioTrack.getTimestamp": ExoPlayer's position already comes
+  from it; it is not exposed directly.
+- **Echo out:** native `abcd::EchoLine` (C++, feedback delay with a 4.5 kHz damping low-pass, ≤ 0.95
+  feedback) driven through `NativeEcho`/JNI from `DeckGainProcessor` (trim → echo → limiter; the echo path runs
+  only while active or ringing out). Over the last 2 bars the send rises to 0.6 (delay = one beat); at the bar
+  line the dry signal drops within a beat, the tail decays (feedback 0.55, 6 beats) and the next song fades in
+  over two beats on its downbeat.
+- **Lab "Audition a transition"** (§4.5): two analysed songs + Automatic/Beatmatched/Echo out/Classic, played
+  through the real engine from 12 s before the blend (`AuditionPlanner`).
+- **Language fix (owner report: English mix had Hindi songs):** Latin-script Hindi titles carried no language
+  evidence. `RomanizedIndicHints`: film marker `(From "…")`, distinctive Hindi/Punjabi words, well-known Indian
+  artists. With no Indian language selected, songs scoring ≥ 0.6 are dropped; distinctive words also tag
+  HINDI/PUNJABI. Verified on the emulator: an English + Party mix had no Hindi songs.
+- **Tuning after the first emulator run** (1 of 7 transitions beatmatched, 58 ms phase error at blend start):
+  ordering now favours tempo (`ScoringConfig`: bpm weight 1.6 > energy 1.2, tempo score 0 beyond 12%, BPM
+  trusted from 0.25 like the planner); one bar of silent pre-roll; up to 8% speed correction while silent, 3%
+  once audible. Second run (English, Party, Chorus Hits): 8 of 9 transitions beatmatched, phase error 2-14 ms
+  when the blend opened and 0-1 ms at its end; the one echo out was a 120 → 96 BPM gap. Lab audition with a
+  hand-picked echo out worked.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

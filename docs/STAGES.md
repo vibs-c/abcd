@@ -119,7 +119,7 @@ Device Connect blocks DJ Mode, cast/Listen Together end it (design §8); the dec
 to system EQ apps (design §4.2); design doc and CLAUDE.md synced with what was built. APK
 `apk/abcd-stage-8d.apk`. A stage-9 draft (`MixPlanner`, `CrossfadeCurve`) is parked in `git stash@{0}`.
 
-## 9. Mix points, beat-matching, echo out · Opus · ⬜ (brief §9.2, §9.3, §4.5) — answers the 8c feedback
+## 9. Mix points, beat-matching, echo out · Opus · ✅ built, awaiting phone test (brief §9.2, §9.3, §4.5) — answers the 8c feedback
 
 - **9a Mix points by style** (§9.3; restore the parked `MixPlanner`, finish and unit-test it). Leave the
   outgoing song on a bar line while it is still full: Chorus Hits after the main chorus (or the chorus right

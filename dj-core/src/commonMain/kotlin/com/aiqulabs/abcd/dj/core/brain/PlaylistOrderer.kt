@@ -68,14 +68,14 @@ class PlaylistOrderer(
     }
 
     /**
-     * 1.0 when the tempos match within ±6% after allowing half or double time, falling to 0 at 25%.
+     * 1.0 when the tempos match within ±6% after allowing half or double time, falling to 0 at 12%.
      * Tempos that are not trusted score neutral: the mix then uses a technique that needs no beat-match.
      */
     fun bpmCompat(
         a: AnalysisResult,
         b: AnalysisResult,
     ): Double {
-        if (a.bpmConfidence < config.minTrustedConfidence || b.bpmConfidence < config.minTrustedConfidence) return config.neutralScore
+        if (a.bpmConfidence < config.minTrustedBpmConfidence || b.bpmConfidence < config.minTrustedBpmConfidence) return config.neutralScore
         if (a.bpm <= 0.0 || b.bpm <= 0.0) return config.neutralScore
         val ratio = b.bpm / a.bpm
         val difference = minOf(abs(ratio - 1.0), abs(ratio / 2.0 - 1.0), abs(ratio * 2.0 - 1.0))

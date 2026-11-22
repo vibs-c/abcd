@@ -60,6 +60,10 @@ class MetadataTrackTagger : TrackTagger {
                 tags[language] = maxOf(tags[language] ?: 0f, NAME_CONFIDENCE)
             }
         }
+        // Transliterated Hindi/Punjabi titles ("Tera Ban Jaunga") carry no script; distinctive words do.
+        RomanizedIndicHints.languageWords(track).forEach { (language, confidence) ->
+            tags[language] = maxOf(tags[language] ?: 0f, confidence)
+        }
         return tags.map { (language, confidence) ->
             TrackTagValue(TagType.LANGUAGE, language.name, TagSource.METADATA, confidence)
         }
