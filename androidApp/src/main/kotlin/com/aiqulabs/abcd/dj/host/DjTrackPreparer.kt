@@ -9,6 +9,7 @@ import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.prep.TrackPreparation
 import com.aiqulabs.abcd.dj.core.prep.TrackPreparer
 import com.aiqulabs.abcd.dj.data.DjAnalysisRepository
+import com.aiqulabs.abcd.dj.data.DjFeedbackRepository
 import com.metrolist.shared.model.SongItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
@@ -28,11 +29,14 @@ internal class DjTrackPreparer(
     private val analyzer: AudioAnalyzer,
     private val songFor: (videoId: String) -> SongItem?,
     private val keepAudio: Boolean,
+    /** Where language, mood and energy tags go (stage 10); null skips tagging. */
+    private val feedback: DjFeedbackRepository? = null,
 ) : TrackPreparer {
     override suspend fun prepare(track: DjTrack): TrackPreparation =
         try {
             val saved = repository.load(track.videoId)
             if (saved != null && saved.result.analysisVersion >= analyzer.analysisVersion) {
+                feedback?.let { DjTags.saveIfMissing(it, track, saved.result) }
                 TrackPreparation.Ready(saved.result, alreadyKnown = true)
             } else {
                 // One stalled download or decoder must not freeze "Preparing your mix" on this song forever.
@@ -50,8 +54,10 @@ internal class DjTrackPreparer(
         val song = songFor(track.videoId) ?: return TrackPreparation.Failed("Unknown song")
         val started = System.nanoTime()
         // Synced lyrics (when Metrolist has them) re-rank the chorus candidates (brief §5.5).
-        val result = DjLyrics.rankChoruses(song, decodeAndAnalyse(song))
+        val ranked = DjLyrics.rankChoruses(song, decodeAndAnalyse(song))
+        val result = ranked.result
         repository.save(track.videoId, result, track)
+        feedback?.let { DjTags.save(it, track, result, ranked.lyricsText) }
         Timber.tag(TAG).d("%s analysed in %d ms", track.videoId, (System.nanoTime() - started) / 1_000_000)
         return TrackPreparation.Ready(result, alreadyKnown = false)
     }

@@ -112,6 +112,8 @@ sealed interface DjEngineEvent {
         val from: DjTrack,
         val to: DjTrack,
         val plan: TransitionPlan,
+        /** True when the user pressed "Next" (a skip of [from]); false for a planned transition. */
+        val byUser: Boolean = false,
     ) : DjEngineEvent
 
     data class TrackSkipped(

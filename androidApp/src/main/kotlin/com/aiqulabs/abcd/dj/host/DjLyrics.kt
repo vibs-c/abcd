@@ -22,17 +22,25 @@ internal object DjLyrics {
     private const val TAG = "DjLyrics"
     private const val TIMEOUT_MS = 8_000L
 
+    /** An analysis after the lyrics pass, and the lyric text (synced or not) for language tags (brief §6.2). */
+    class Ranked(
+        val result: AnalysisResult,
+        val lyricsText: String?,
+    )
+
     /** [result] with its chorus candidates re-ranked by repeated lyric lines, when lyrics are available. */
     suspend fun rankChoruses(
         song: SongItem,
         result: AnalysisResult,
-    ): AnalysisResult {
-        if (result.chorusCandidates.isEmpty()) return result
-        val lines = linesFor(song)
-        if (lines.isEmpty()) return result
-        return ChorusRanker.withLyrics(result, lines).also { ranked ->
+    ): Ranked {
+        val all = linesFor(song)
+        val text = all.takeIf { it.isNotEmpty() }?.joinToString(separator = "\n") { it.text }
+        // Unsynced lyrics come back with every line at 0; they cannot place a chorus.
+        val lines = all.takeIf { lines -> lines.map { it.timeMs }.distinct().size > 1 }.orEmpty()
+        if (result.chorusCandidates.isEmpty() || lines.isEmpty()) return Ranked(result, text)
+        return Ranked(ChorusRanker.withLyrics(result, lines), text).also { ranked ->
             val before = result.mainChorus?.startMs
-            val after = ranked.mainChorus?.startMs
+            val after = ranked.result.mainChorus?.startMs
             Timber.tag(TAG).d("%s: %d lyric lines, main chorus %s -> %s ms", song.id, lines.size, before, after)
         }
     }
@@ -54,9 +62,6 @@ internal object DjLyrics {
                 .parseLyrics(lyrics)
                 .filter { it.text.isNotBlank() }
                 .map { LyricLine(it.time, it.text) }
-                // Unsynced lyrics come back with every line at 0; they cannot place a chorus.
-                .takeIf { lines -> lines.map { it.timeMs }.distinct().size > 1 }
-                .orEmpty()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

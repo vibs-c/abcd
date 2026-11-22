@@ -291,8 +291,10 @@ object DjLabController {
                 )
                 analysed
             }
-        val ranked = if (song != null) DjLyrics.rankChoruses(song, result) else result
+        val withLyrics = song?.let { DjLyrics.rankChoruses(it, result) }
+        val ranked = withLyrics?.result ?: result
         repository.save(videoId, ranked, track)
+        DjTags.save(DjData.feedbackRepository(context), track, ranked, withLyrics?.lyricsText)
 
         val stored = checkNotNull(repository.load(videoId))
         mutableState.update { it.copy(busy = null, detail = LabDetail(videoId, title, artists, stored)) }

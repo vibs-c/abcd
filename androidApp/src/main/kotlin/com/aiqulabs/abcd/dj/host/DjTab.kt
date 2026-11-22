@@ -1,7 +1,13 @@
 package com.aiqulabs.abcd.dj.host
 
 import com.aiqulabs.abcd.dj.engine.DjEngineState
+import com.aiqulabs.abcd.dj.ui.live.DjLiveActions
+import com.aiqulabs.abcd.dj.ui.live.DjLiveScreen
+import com.aiqulabs.abcd.dj.ui.live.DjLiveScreenUi
 import com.aiqulabs.abcd.dj.ui.live.DjLiveUi
+import com.aiqulabs.abcd.dj.ui.live.DjQueueItem
+import com.aiqulabs.abcd.dj.ui.live.DjThumbsUi
+import com.aiqulabs.abcd.dj.ui.setup.DjStartState
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -28,8 +34,8 @@ import com.metrolist.android.playback.LocalPlayerConnection
 import com.metrolist.android.ui.component.tabContentTopPadding
 
 /**
- * Content of the DJ tab: the setup screen wired to storage ([DjSetupStore]) and to [DjController], and,
- * when the owner has switched the Lab on, the Lab ([DjLabController]).
+ * Content of the DJ tab: the live screen while a mix runs (stage 10), the setup screen wired to storage
+ * ([DjSetupStore]) and to [DjController], and, when the owner has switched the Lab on, the Lab ([DjLabController]).
  */
 @Composable
 fun DjTab(modifier: Modifier = Modifier) {
@@ -42,6 +48,13 @@ fun DjTab(modifier: Modifier = Modifier) {
     val startState by DjController.state.collectAsState()
     val libraryState by DjLibraryAnalyzer.state.collectAsState()
     val engineState by DjPlayback.state.collectAsState()
+    val lastTransition by DjPlayback.lastTransition.collectAsState()
+    val live = engineState?.let(::liveUiOf)
+    // While a mix runs the tab shows the live screen; "Set up a new mix" switches to the setup screen.
+    var showSetup by remember { mutableStateOf(false) }
+    LaunchedEffect(live == null, startState is DjStartState.Started) {
+        if (live == null || startState is DjStartState.Started) showSetup = false
+    }
     // Same insets as the Home and Library tabs: below the top bar, above the mini player.
     val insets = PaddingValues(top = tabContentTopPadding(), bottom = LocalMiniPlayerBottomInset.current)
 
@@ -85,6 +98,27 @@ fun DjTab(modifier: Modifier = Modifier) {
         return
     }
 
+    val running = engineState
+    if (live != null && running != null && !showSetup) {
+        DjLiveScreen(
+            ui = DjLiveScreenUi(live, queueOf(running), lastTransition?.let { DjThumbsUi(it.fromTitle, it.toTitle, it.rating) }),
+            actions =
+                DjLiveActions(
+                    onPlayPause = DjPlayback::togglePlayPause,
+                    onNext = DjPlayback::skipNext,
+                    onEnd = DjPlayback::end,
+                    onThumb = DjPlayback::rateLastTransition,
+                    onRemove = DjPlayback::removeUpcoming,
+                    onMove = DjPlayback::moveUpcoming,
+                    onNewMix = { showSetup = true },
+                ),
+            modifier = modifier.fillMaxSize(),
+            contentPadding = insets,
+        )
+        return
+    }
+    BackHandler(enabled = live != null) { showSetup = false }
+
     DjSetupScreen(
         draft = draft,
         startState = startState,
@@ -109,15 +143,28 @@ fun DjTab(modifier: Modifier = Modifier) {
         onOpenLab = { labOpen = true },
         modifier = modifier.fillMaxSize(),
         contentPadding = insets,
-        live = engineState?.let(::liveUiOf),
+        live = live,
         onLivePlayPause = DjPlayback::togglePlayPause,
         onLiveNext = DjPlayback::skipNext,
         onLiveEnd = DjPlayback::end,
+        onLiveOpen = { showSetup = false },
     )
 }
 
-/** The engine's state as the DJ tab's "Now mixing" card shows it. */
-private fun liveUiOf(state: DjEngineState): DjLiveUi? {
+/** The songs still to come; the first is locked while the DJ is already mixing into it. */
+private fun queueOf(state: DjEngineState): List<DjQueueItem> =
+    state.upcoming.mapIndexed { index, track ->
+        DjQueueItem(
+            videoId = track.videoId,
+            title = track.title,
+            artist = track.artists.joinToString(", ").ifBlank { null },
+            thumbnailUrl = track.thumbnailUrl,
+            locked = index == 0 && state.transition != null,
+        )
+    }
+
+/** The engine's state as the live screen, the "Now mixing" card and the mini bar show it. */
+internal fun liveUiOf(state: DjEngineState): DjLiveUi? {
     if (!state.isActive) return null
     val status =
         when (state.phase) {
@@ -137,6 +184,7 @@ private fun liveUiOf(state: DjEngineState): DjLiveUi? {
         isPlaying = state.playWhenReady,
         status = status,
         mixingInto = state.transition?.let { state.next?.title },
+        thumbnailUrl = state.current?.thumbnailUrl,
     )
 }
 

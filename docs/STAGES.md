@@ -147,7 +147,7 @@ to system EQ apps (design §4.2); design doc and CLAUDE.md synced with what was 
 - **Risks:** speed nudges may be audible (fallback: our own native resampler for the nudge); rubato film
   songs with weak grids (they get echo out/classic); position jitter on some phones (logged per transition).
 
-## 10. Live screen, feedback, tags, more song sources · Sonnet · ⬜ (brief §4.3, §6.2, §6.3, §7.1, §5.1)
+## 10. Live screen, feedback, tags, more song sources · Sonnet · ✅ (brief §4.3, §6.2, §6.3, §7.1, §5.1)
 
 - **Live screen** (§4.3): artwork, now playing / up next, thumbs up/down on the last transition, queue with
   remove and reorder (`DjMixEngine.updateQueue` exists), play/pause, End session. **DJ mini bar** on the other

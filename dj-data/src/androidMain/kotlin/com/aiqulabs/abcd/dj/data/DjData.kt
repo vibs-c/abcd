@@ -19,6 +19,9 @@ object DjData {
     @Volatile
     private var repository: DjAnalysisRepository? = null
 
+    @Volatile
+    private var feedback: DjFeedbackRepository? = null
+
     /** The app-wide database (created on first use). */
     fun database(context: Context): DjDatabase =
         database ?: synchronized(this) {
@@ -29,6 +32,12 @@ object DjData {
     fun analysisRepository(context: Context): DjAnalysisRepository =
         repository ?: synchronized(this) {
             repository ?: DjAnalysisRepository(database(context).dao()).also { repository = it }
+        }
+
+    /** The app-wide feedback, tags and sessions store (stage 10). */
+    fun feedbackRepository(context: Context): DjFeedbackRepository =
+        feedback ?: synchronized(this) {
+            feedback ?: DjFeedbackRepository(database(context).dao()).also { feedback = it }
         }
 
     /** Builds a database at [path]; tests use this with their own file. */

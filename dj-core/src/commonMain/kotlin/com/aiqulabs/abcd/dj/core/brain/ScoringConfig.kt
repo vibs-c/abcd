@@ -4,7 +4,7 @@ package com.aiqulabs.abcd.dj.core.brain
  * Every weight and threshold of the next-track score in one place (brief §7.3):
  * `score = w1·vibeMatch + w2·bpmCompat + w3·keyCompat + w4·energyFit + w5·freshness + w6·feedback − penalties`.
  *
- * v1 orders a finished, already-matching playlist, so vibe, freshness and feedback weights default to 0.
+ * v1 orders a finished, already-matching playlist, so vibe and freshness weights default to 0.
  * They exist now so v2 (look-ahead planning, feedback learning) only changes numbers, not structure.
  */
 data class ScoringConfig(
@@ -14,7 +14,8 @@ data class ScoringConfig(
     val keyWeight: Double = 0.8,
     val energyWeight: Double = 1.2,
     val freshnessWeight: Double = 0.0,
-    val feedbackWeight: Double = 0.0,
+    /** Thumbs on a pair and removals/skips of a track (stage 10, brief 6.3). */
+    val feedbackWeight: Double = 0.8,
     /** Subtracted when the same artist played within the last [artistSpacing] tracks. */
     val sameArtistPenalty: Double = 2.0,
     val artistSpacing: Int = 3,

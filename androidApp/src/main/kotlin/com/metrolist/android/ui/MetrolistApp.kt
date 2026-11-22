@@ -155,7 +155,9 @@ import androidx.navigationevent.compose.NavigationEventDispatcherOwnerHostDefaul
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.aiqulabs.abcd.dj.host.DjMiniBarHost
 import com.aiqulabs.abcd.dj.host.DjTab
+import com.aiqulabs.abcd.dj.host.isDjMixRunning
 import com.metrolist.android.App
 import com.metrolist.android.BuildConfig
 import com.metrolist.android.LocalListenTogetherManager
@@ -763,6 +765,10 @@ fun MetrolistApp(
         val shouldShowMiniPlayer = hasMedia
         val immersiveContent = remember { mutableStateOf(false) }
         val shouldRenderMiniPlayer = shouldShowMiniPlayer && !shouldHideMiniPlayerForIme
+        // abcd: the DJ mini bar takes the mini player's place on other tabs while a mix runs (Metrolist's player is stopped then).
+        val showDjMiniBar =
+            isDjMixRunning() && !shouldRenderMiniPlayer && !shouldHideMiniPlayerForIme && navigationState.topLevelRoute != Screen.Dj
+        val miniPlayerSlotUsed = shouldRenderMiniPlayer || showDjMiniBar
 
         val topLevelScreens = remember { setOf(Screen.Home, Screen.Library, Screen.Dj, Screen.EasterEgg) }
         val shouldShowTopBar =
@@ -840,28 +846,28 @@ fun MetrolistApp(
             }
         val miniPlayerInsets =
             calculateMiniPlayerInsets(
-                systemBottomInset = if (shouldRenderMiniPlayer) safeBottomPadding else navigationBarBottomPadding,
+                systemBottomInset = if (miniPlayerSlotUsed) safeBottomPadding else navigationBarBottomPadding,
                 navigationBottomInset = navigationBottomInset,
                 navigationConsumesSpace = navigationConsumesSpace,
-                playerHeight = if (shouldRenderMiniPlayer) miniPlayerHeight else 0.dp,
-                playerBottomSpacing = if (shouldRenderMiniPlayer) miniPlayerBottomSpacing else 0.dp,
+                playerHeight = if (miniPlayerSlotUsed) miniPlayerHeight else 0.dp,
+                playerBottomSpacing = if (miniPlayerSlotUsed) miniPlayerBottomSpacing else 0.dp,
             )
         val miniPlayerCollapsedBound =
-            if (!shouldRenderMiniPlayer) {
+            if (!miniPlayerSlotUsed) {
                 0.dp
             } else {
                 miniPlayerHeight + miniPlayerInsets.bottomOffset
             }
 
         val hiddenMiniPlayerContentInset =
-            if (shouldRenderMiniPlayer) {
+            if (miniPlayerSlotUsed) {
                 miniPlayerHeight + hiddenMiniPlayerBottomOffset
             } else {
                 navigationBarBottomPadding
             }
         val floatingContentInset = if (useFloatingNavBar && shouldShowNavigationBar) floatingNavBarHeight else 0.dp
         val visibleMiniPlayerContentInset =
-            (if (shouldRenderMiniPlayer) miniPlayerHeight + miniPlayerBottomSpacing else 0.dp) + floatingContentInset
+            (if (miniPlayerSlotUsed) miniPlayerHeight + miniPlayerBottomSpacing else 0.dp) + floatingContentInset
         val miniPlayerContentInset = {
             val animatedInset =
                 if (hasBottomNavigation) {
@@ -1888,6 +1894,20 @@ fun MetrolistApp(
                                 },
                             )
                         }
+                    }
+
+                    // abcd: DJ mini bar (stage 10), in the mini player's place.
+                    if (showDjMiniBar) {
+                        DjMiniBarHost(
+                            onOpen = { navigator.navigateToRoot(Screen.Dj) },
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .windowInsetsPadding(horizontalSystemBars.only(WindowInsetsSides.Horizontal))
+                                    .padding(bottom = miniPlayerInsets.bottomOffset)
+                                    .height(miniPlayerHeight)
+                                    .zIndex(2f),
+                        )
                     }
 
                     SnackbarHost(

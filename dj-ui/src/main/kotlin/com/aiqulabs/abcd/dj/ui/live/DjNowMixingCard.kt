@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.dj_end_session
 import com.metrolist.shared.generated.resources.dj_last_song
+import com.metrolist.shared.generated.resources.dj_live_show_mix
 import com.metrolist.shared.generated.resources.dj_mix_progress
 import com.metrolist.shared.generated.resources.dj_mixing_into
 import com.metrolist.shared.generated.resources.dj_next
@@ -43,13 +44,15 @@ data class DjLiveUi(
     val status: Status,
     /** Title of the incoming song while a transition runs. */
     val mixingInto: String? = null,
+    /** Artwork of the song playing (stage 10). */
+    val thumbnailUrl: String? = null,
 ) {
     enum class Status { STARTING, PLAYING, PAUSED, WAITING_FOR_FOCUS, ENDING }
 }
 
 /**
- * The running mix on the DJ tab (stage 8): now playing, up next, play/pause, next and End session.
- * Stage 10 turns this into the full live screen (artwork, queue editing, thumbs).
+ * The running mix as a card on the setup screen (stage 8): now playing, up next, play/pause, next and End
+ * session. Shown while the user sets up a new mix; [onOpen] goes back to the full [DjLiveScreen] (stage 10).
  */
 @Composable
 fun DjNowMixingCard(
@@ -58,6 +61,8 @@ fun DjNowMixingCard(
     onNext: () -> Unit,
     onEnd: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Opens the live screen (stage 10); no button when null. */
+    onOpen: (() -> Unit)? = null,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -117,6 +122,7 @@ fun DjNowMixingCard(
                 TextButton(onClick = onEnd, enabled = enabled, modifier = Modifier.weight(1f, fill = false)) {
                     Text(stringResource(Res.string.dj_end_session))
                 }
+                onOpen?.let { open -> TextButton(onClick = open) { Text(stringResource(Res.string.dj_live_show_mix)) } }
             }
         }
     }

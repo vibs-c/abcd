@@ -5,6 +5,8 @@ import com.aiqulabs.abcd.dj.analysis.MediaCodecPcmDecoder
 import com.aiqulabs.abcd.dj.analysis.NativeAudioAnalyzer
 import com.aiqulabs.abcd.dj.core.brain.DjPlaylistBuilder
 import com.aiqulabs.abcd.dj.core.brain.PlaylistOrderer
+import com.aiqulabs.abcd.dj.core.feedback.FeedbackSnapshot
+import com.aiqulabs.abcd.dj.core.mix.MixPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
 import com.aiqulabs.abcd.dj.core.prep.SessionPreparer
@@ -91,7 +93,17 @@ object DjController {
         playerConnection: PlayerConnection,
     ): DjStartState {
         val source = YouTubeCandidateSource()
-        val built = DjPlaylistBuilder(source, MetadataTrackTagger()).build(settings)
+        // Feedback (brief §6.3): banned songs stay out, often-removed ones sink, liked pairs and techniques win.
+        val feedback =
+            try {
+                DjData.feedbackRepository(context).snapshot()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "Could not read feedback; mixing without it")
+                FeedbackSnapshot.EMPTY
+            }
+        val built = DjPlaylistBuilder(source, MetadataTrackTagger()).build(settings, bannedVideoIds = feedback.banned)
         val playableIds =
             BlockedContent
                 .filterPlayableSongs(
@@ -120,6 +132,7 @@ object DjController {
                 analyzer = analyzer,
                 songFor = source::songFor,
                 keepAudio = true,
+                feedback = DjData.feedbackRepository(context),
             )
         val startedAt = System.nanoTime()
         val prepared =
@@ -141,7 +154,7 @@ object DjController {
             return DjStartState.Failed(reason, foundCount = prepared.tracks.size, detail = prepared.lastFailureReason)
         }
 
-        val ordered = PlaylistOrderer().order(prepared.tracks, plan.settings)
+        val ordered = PlaylistOrderer(feedback = feedback).order(prepared.tracks, plan.settings)
         logOrder(ordered)
         // Stage 8: the mix plays through the DJ engine (its own two decks), not Metrolist's queue.
         val songs = ordered.mapNotNull { t -> source.songFor(t.track.videoId)?.let { t.track.videoId to it } }.toMap()
@@ -161,7 +174,7 @@ object DjController {
                 // Metrolist binds its music service lazily; the DJ host lives in it, so make sure it is up.
                 runCatching { playerConnection.awaitConnected() }
                     .onFailure { Timber.tag(TAG).w(it, "Music service did not connect") }
-                DjPlayback.start(playable, songs, plan.settings)
+                DjPlayback.start(playable, songs, plan.settings, MixPlanner(techniqueScores = feedback.techniqueScores))
             }
         if (!started) return DjStartState.Failed(DjStartState.Reason.ERROR)
         return DjStartState.Started(playable.size)

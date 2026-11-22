@@ -75,12 +75,12 @@ DJ modules (brief §10; package `com.aiqulabs.abcd.dj.<module>`):
 
 | Module | Type | Contents | Status |
 |---|---|---|---|
-| `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, `SessionPreparer`, `PlaylistOrderer` + `ScoringConfig`; later technique selection | Has code + tests; `mix/`: `MixPlanner` (style mix points, technique selector), `CrossfadeCurve`, `AuditionPlanner` (stage 9) |
+| `dj-core` | KMP, `jvm()` only | Session settings, models, playlist builder, tagging, `VibeParser`/`TrackTagger`, `SessionPreparer`, `PlaylistOrderer` + `ScoringConfig`; later technique selection | Has code + tests; `mix/`: `MixPlanner` (style mix points, technique selector, liked techniques), `CrossfadeCurve`, `AuditionPlanner` (stage 9); `feedback/FeedbackSnapshot`, `tagging/AnalysisTagger` (stage 10) |
 | `dj-native` | Android lib | C++ via CMake/NDK: Essentia-based analysis, JNI; `core/` is portable C++ (no JNI/Android). See `dj-native/README.md` | Analysis + echo-out DSP (`core/echo.cpp`, `NativeEcho`) |
 | `dj-analysis` | Android lib | `MediaCodecPcmDecoder` (tries `OpusPcmDecoder`: in-process libopus for WebM/Opus, ~15x faster), `NativeAudioAnalyzer`, `AnalysisGate` (one decode+analysis at a time) | Done (pre-analysis lives in the host glue, stage 6) |
-| `dj-data` | KMP, Android target only | Separate Room DB `abcd_dj.db` (all v1 entities), DAO, `DjAnalysisRepository`, `DjData`, `DjSetupStore`; exported schema in `schemas/` | Done (stage 5) |
+| `dj-data` | KMP, Android target only | Separate Room DB `abcd_dj.db` (all v1 entities), DAO, `DjAnalysisRepository`, `DjData`, `DjSetupStore`; exported schema in `schemas/` | Done (stage 5); `DjFeedbackRepository` (feedback, tags, sessions; stage 10) |
 | `dj-engine` | Android lib | `DjMixEngine` / `ExoDjMixEngine` (two decks, `DeckGainProcessor` trim+limiter, `DjAudioFocus`, `DjSessionPlayer` for the media session) | Beatmatched blend (phase lock), echo out, chorus jump, no-dip crossfade (stage 9) |
-| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup (3), Lab (5), Preparing + library cards (6), "Now mixing" card (8); live screen + mini bar in stage 10 |
+| `dj-ui` | Android lib | Compose screens: Setup, Preparing, Live, Chorus editor, Lab | Setup (3), Lab (5), Preparing + library cards (6), "Now mixing" card (8), live screen + mini bar (10) |
 
 **Host glue rule:** a library cannot depend on `androidApp`. Code that touches Metrolist internals
 (`PlayerConnection`, `AudioCacheManager`, `MusicService`, stream resolver) goes in new files under

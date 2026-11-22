@@ -96,6 +96,7 @@ object DjLibraryAnalyzer {
                 analyzer = analyzer,
                 songFor = byId::get,
                 keepAudio = false,
+                feedback = DjData.feedbackRepository(context),
             )
         var analysed = 0
         var failed = 0

@@ -6,6 +6,7 @@ import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.tagging.RomanizedIndicHints
 import com.aiqulabs.abcd.dj.core.tagging.TagType
 import com.aiqulabs.abcd.dj.core.tagging.TrackTagger
+import kotlin.random.Random
 
 /**
  * The tracks prepared for a session. [tracks] holds [coreCount] tracks that fill the session
@@ -37,6 +38,7 @@ class DjPlaylistBuilder(
     private val filter: CandidateFilter = CandidateFilter(),
     private val artistSpacing: Int = 3,
     private val maxRadioSeeds: Int = 5,
+    private val random: Random = Random.Default,
 ) {
     suspend fun build(
         settings: DjSessionSettings,
@@ -47,9 +49,13 @@ class DjPlaylistBuilder(
         val core = PlaylistSizer.coreTrackCount(normalized)
 
         val perQuery = SearchQueryBuilder.queries(normalized).map { source.search(it) }
+        // Mood pages and the user's own songs are not chosen by language, so they need positive evidence of a
+        // selected language to get in (brief 7.1; stage 10). The user's songs are capped so searches still lead.
+        val moodPage = source.moodPage(normalized.mood).filter { provenLanguage(it, normalized) }
+        val library = source.libraryTracks().filter { provenLanguage(it, normalized) }.shuffled(random).take(maxOf(2, target / LIBRARY_SHARE))
         val picked = ArrayList<DjTrack>()
         val usedIds = HashSet<String>()
-        addInOrder(interleave(perQuery), normalized, bannedVideoIds, picked, usedIds, target)
+        addInOrder(interleave(perQuery + listOf(moodPage, library)), normalized, bannedVideoIds, picked, usedIds, target)
 
         var seedIndex = 0
         while (picked.size < target && seedIndex < minOf(picked.size, maxRadioSeeds)) {
@@ -139,7 +145,24 @@ class DjPlaylistBuilder(
         return languageTags.none { it.confidence >= STRONG_LANGUAGE_EVIDENCE }
     }
 
+    /**
+     * Stricter than [matchesLanguage], for sources that are not language-targeted: the track must show a selected
+     * language (a tag), or, for English, Latin script with no Indian evidence at all.
+     */
+    private suspend fun provenLanguage(
+        track: DjTrack,
+        settings: DjSessionSettings,
+    ): Boolean {
+        if (settings.anyLanguage) return true
+        val selected = settings.languages.map(DjLanguage::name).toSet()
+        val tags = tagger.tag(track).filter { it.type == TagType.LANGUAGE }
+        if (tags.any { it.value in selected }) return true
+        return DjLanguage.ENGLISH in settings.languages && tags.isEmpty() && RomanizedIndicHints.indianScore(track) < WEAK_INDIAN_EVIDENCE
+    }
+
     private companion object {
+        const val WEAK_INDIAN_EVIDENCE = 0.3f
+        const val LIBRARY_SHARE = 4
         const val STRONG_LANGUAGE_EVIDENCE = 0.6f
     }
 }

@@ -9,6 +9,7 @@ import com.aiqulabs.abcd.dj.core.mix.TransitionPlanner
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.DjTrack
 import com.aiqulabs.abcd.dj.core.prep.PreparedTrack
+import com.aiqulabs.abcd.dj.data.DjData
 import com.aiqulabs.abcd.dj.engine.DjEngineEvent
 import com.aiqulabs.abcd.dj.engine.DjMixEngine
 import com.aiqulabs.abcd.dj.engine.DjMixSession
@@ -68,6 +69,7 @@ internal class DjPlaybackHost(
     private var songs: Map<String, SongItem> = emptyMap()
     private val files = HashMap<String, DjAudioFile>()
     private var order: List<DjTrack> = emptyList()
+    private var recorder: DjFeedbackRecorder? = null
 
     /** True from [enter] until an exit starts; the guard in MusicService ends DJ Mode while this is true. */
     val isActive: Boolean get() = engine != null
@@ -128,6 +130,7 @@ internal class DjPlaybackHost(
             val newEngine = ExoDjMixEngine(context, source) { requests }
             engine = newEngine
             ops.setSessionPlayer(newEngine.sessionPlayer)
+            recorder = DjFeedbackRecorder(DjData.feedbackRepository(context), scope, tracks, settings)
             observe(newEngine)
             newEngine.start(DjMixSession(tracks, settings, planner))
             Timber.tag(TAG).i("DJ Mode on: %d tracks", tracks.size)
@@ -142,6 +145,36 @@ internal class DjPlaybackHost(
     fun pause() = engine?.pause()
 
     fun skipNext() = engine?.skipNext()
+
+    /** Thumbs on the transition that just happened (brief §4.3). */
+    fun rateLastTransition(up: Boolean) = recorder?.rate(up)
+
+    /** Removes [videoId] from the songs still to come; the DJ re-plans the transitions around it. */
+    fun removeUpcoming(
+        videoId: String,
+        neverPlay: Boolean,
+    ) {
+        val current = engine ?: return
+        val upcoming = current.state.value.upcoming.map { it.videoId }
+        if (videoId !in upcoming) return
+        current.updateQueue(upcoming - videoId)
+        recorder?.removed(videoId, neverPlay)
+    }
+
+    /** Moves [videoId] [by] places up (negative) or down (positive) in the songs still to come. */
+    fun moveUpcoming(
+        videoId: String,
+        by: Int,
+    ) {
+        val current = engine ?: return
+        val upcoming = current.state.value.upcoming.map { it.videoId }.toMutableList()
+        val from = upcoming.indexOf(videoId)
+        if (from < 0) return
+        val to = (from + by).coerceIn(0, upcoming.lastIndex)
+        if (to == from) return
+        upcoming.add(to, upcoming.removeAt(from))
+        current.updateQueue(upcoming)
+    }
 
     /**
      * Ends DJ Mode: fade, release the decks, give the session back to Metrolist. [restoreNormal] re-prepares
@@ -181,6 +214,9 @@ internal class DjPlaybackHost(
     )
 
     private fun detach(): Leftovers {
+        recorder?.finish()
+        recorder = null
+        DjPlayback.publishLastTransition(null)
         val leftovers = Leftovers(savedPositionMs, files.values.toList())
         savedPositionMs = null
         files.clear()
@@ -214,11 +250,14 @@ internal class DjPlaybackHost(
     }
 
     private fun observe(engine: DjMixEngine) {
+        val feedback = recorder
         observers =
-            listOf(
+            listOfNotNull(
                 scope.launch { engine.state.collect { DjPlayback.publish(it) } },
+                feedback?.let { r -> scope.launch { r.lastTransition.collect { DjPlayback.publishLastTransition(it) } } },
                 scope.launch {
                     engine.events.collect { event ->
+                        feedback?.onEvent(event)
                         when (event) {
                             is DjEngineEvent.TrackFinished -> {
                                 // Played: unpin and delete (abcd's own downloads only; Metrolist's files are never touched).

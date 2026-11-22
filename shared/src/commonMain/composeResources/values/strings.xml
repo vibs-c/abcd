@@ -5583,6 +5583,23 @@
     <string name="dj_next">Next</string>
     <string name="dj_end_session">End session</string>
 
+    <!-- abcd DJ Mode: live screen, thumbs and queue (stage 10) -->
+    <string name="dj_live_show_mix">Show mix</string>
+    <string name="dj_live_new_mix">Set up a new mix</string>
+    <string name="dj_live_up_next">Up next</string>
+    <string name="dj_live_queue">Coming up (%1$d)</string>
+    <string name="dj_live_rate_title">How was that mix?</string>
+    <string name="dj_live_rate_thanks">Thanks, the DJ will remember</string>
+    <string name="dj_live_rate_pair">%1$s → %2$s</string>
+    <string name="dj_live_thumbs_up">Good mix</string>
+    <string name="dj_live_thumbs_down">Bad mix</string>
+    <string name="dj_queue_mixing_in">Mixing in now</string>
+    <string name="dj_queue_move_up">Move up</string>
+    <string name="dj_queue_move_down">Move down</string>
+    <string name="dj_queue_options">Remove options</string>
+    <string name="dj_queue_remove">Remove from this mix</string>
+    <string name="dj_queue_never_play">Never play this song</string>
+
     <!-- abcd DJ Mode: analyse my library -->
     <string name="dj_library_title">Analyse my library</string>
     <string name="dj_library_desc">Analyses your liked, library and downloaded songs in the background so mixes start faster.</string>

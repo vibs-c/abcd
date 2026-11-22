@@ -130,6 +130,7 @@ fun DjSetupScreen(
     onLivePlayPause: () -> Unit = {},
     onLiveNext: () -> Unit = {},
     onLiveEnd: () -> Unit = {},
+    onLiveOpen: (() -> Unit)? = null,
 ) {
     val building = startState is DjStartState.Building || startState is DjStartState.Preparing
     val scroll = rememberScrollState()
@@ -156,7 +157,7 @@ fun DjSetupScreen(
             )
         }
 
-        live?.let { DjNowMixingCard(it, onPlayPause = onLivePlayPause, onNext = onLiveNext, onEnd = onLiveEnd) }
+        live?.let { DjNowMixingCard(it, onPlayPause = onLivePlayPause, onNext = onLiveNext, onEnd = onLiveEnd, onOpen = onLiveOpen) }
         // While a mix plays, its card replaces the "Your mix is playing" result.
         if (live == null || startState !is DjStartState.Started) StatusCard(startState, onCancel, onDismissResult)
 

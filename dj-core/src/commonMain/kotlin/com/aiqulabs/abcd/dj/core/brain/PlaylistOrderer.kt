@@ -1,5 +1,6 @@
 package com.aiqulabs.abcd.dj.core.brain
 
+import com.aiqulabs.abcd.dj.core.feedback.FeedbackSnapshot
 import com.aiqulabs.abcd.dj.core.analysis.AnalysisResult
 import com.aiqulabs.abcd.dj.core.model.DjSessionSettings
 import com.aiqulabs.abcd.dj.core.model.EnergyArc
@@ -19,6 +20,7 @@ import kotlin.math.sin
  */
 class PlaylistOrderer(
     private val config: ScoringConfig = ScoringConfig(),
+    private val feedback: FeedbackSnapshot = FeedbackSnapshot.EMPTY,
 ) {
     /** [tracks] in the order they should play. All input tracks are returned. */
     fun order(
@@ -63,7 +65,8 @@ class PlaylistOrderer(
         val sameArtist = recent.any { r -> r.track.artistKeys.any { it in candidate.track.artistKeys } }
         return config.bpmWeight * bpmCompat(previous.analysis, candidate.analysis) +
             config.keyWeight * keyCompat(previous.analysis, candidate.analysis) +
-            config.energyWeight * energyFit(candidateEnergy, targetEnergy) -
+            config.energyWeight * energyFit(candidateEnergy, targetEnergy) +
+            config.feedbackWeight * (feedback.pairBonus(previous.track.videoId, candidate.track.videoId) - feedback.trackPenalty(candidate.track.videoId)) -
             (if (sameArtist) config.sameArtistPenalty else 0.0)
     }
 

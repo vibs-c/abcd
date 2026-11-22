@@ -30,6 +30,8 @@ import kotlin.math.roundToLong
  */
 class MixPlanner(
     private val minTrustedBpmConfidence: Double = MIN_TRUSTED_BPM_CONFIDENCE,
+    /** Thumbs up minus down per technique (brief 6.3): where two techniques would both work, the liked one wins. */
+    private val techniqueScores: Map<TransitionTechnique, Int> = emptyMap(),
 ) : TransitionPlanner {
     override fun firstEntryMs(
         first: PreparedTrack,
@@ -48,6 +50,9 @@ class MixPlanner(
         val keyClash = keysClash(out, inc)
         val technique =
             when {
+                // A key clash is the one case where both a short blend and an echo out are fine: feedback decides.
+                speed != null && keyClash && prefers(TransitionTechnique.ECHO_OUT, over = TransitionTechnique.BEATMATCHED_BLEND) ->
+                    TransitionTechnique.ECHO_OUT
                 speed != null -> TransitionTechnique.BEATMATCHED_BLEND
                 out.barStartsMs.size >= MIN_BARS -> TransitionTechnique.ECHO_OUT
                 else -> TransitionTechnique.CLASSIC_FADE
@@ -89,6 +94,11 @@ class MixPlanner(
             echoLeadMs = if (technique == TransitionTechnique.ECHO_OUT) barMs(out) * ECHO_LEAD_BARS else 0L,
         )
     }
+
+    private fun prefers(
+        technique: TransitionTechnique,
+        over: TransitionTechnique,
+    ): Boolean = (techniqueScores[over] ?: 0) <= -DISLIKED && (techniqueScores[technique] ?: 0) >= 0
 
     /** True when the two keys are trusted and far apart on the Camelot wheel (two harmonies would grate). */
     fun keysClash(
@@ -284,6 +294,7 @@ class MixPlanner(
         const val ECHO_FADE_IN_MIN_MS = 600L
         const val ECHO_FADE_IN_MAX_MS = 1_500L
         const val KEY_TRUST = 0.5
+        const val DISLIKED = 2
 
         /** A first downbeat later than this is a beat-tracking oddity; then the song starts at 0. */
         const val MAX_SILENT_LEAD_MS = 8_000.0

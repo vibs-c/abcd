@@ -521,6 +521,44 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
   when the blend opened and 0-1 ms at its end; the one echo out was a 120 → 96 BPM gap. Lab audition with a
   hand-picked echo out worked.
 
+## 2026-11-22 · Stage 10: live screen, feedback, tags, more song sources
+
+- **Live screen** (§4.3, `dj-ui/live/DjLiveScreen.kt`): while a mix runs the DJ tab opens on it: artwork,
+  now playing, status (mixing into / paused / last song), play/pause, Next, End session, thumbs on the last
+  transition, and the queue ("Coming up") with move up/down and a remove menu ("Remove from this mix" /
+  "Never play this song"). "Set up a new mix" shows the setup screen, whose card has "Show mix" to go back.
+  The song being mixed in is locked. Artwork uses Metrolist's own `AsyncImage` (no new dependency). Metrolist
+  has no thumb-up symbol, so the thumb-down symbol is rotated.
+- **Queue edits** call `DjMixEngine.updateQueue`; transitions are planned when they start, so the songs around
+  an edit are re-planned automatically. The engine now keeps the song cued on the free deck when it is still
+  next (it used to reload it on every edit).
+- **DJ mini bar** (`DjMiniBar`, `DjMiniBarHost`): on the other tabs, in the mini player's place, while a mix
+  runs and Metrolist's player is stopped; tapping it opens the DJ tab. `MetrolistApp` reserves the mini
+  player's space for it, so screen content is not hidden under it (see UPSTREAM_CHANGES).
+- **Feedback** (§6.3): `DjFeedbackRecorder` writes, in order on one IO queue: a `DjSession` row (settings
+  JSON, tracks played, end time); a `TransitionFeedback` row per transition (COMPLETED, or SKIPPED when the
+  user pressed Next, replaced by THUMBS_UP/THUMBS_DOWN when rated; tapping the same thumb again takes it back),
+  with the BPM difference and key relation (COMPATIBLE / NEAR / CLASH / UNKNOWN); `TrackFeedback` DJ plays,
+  skips, removals and bans. No schema change (the tables existed since stage 5).
+- **Explainable adjustment** (`FeedbackSnapshot`, read once per mix): banned songs never enter a mix; each
+  removal costs 0.5 and each skip 0.15 (capped at 2) and thumbs on the exact pair add up to ±1, weighted 0.8
+  in the ordering score; when a beatmatched blend has net thumbs down of 2 or more and keys clash, echo out is
+  chosen instead. Nothing is ever dropped from a built mix by feedback alone except bans.
+- **Tags** (§6.2): after analysis `DjTags` writes LANGUAGE (title/album/artist and, new, the lyrics' script;
+  source METADATA) and MOOD + ENERGY_CLASS (`AnalysisTagger`: tempo, loudness and busy bars → energy; energy
+  × major/minor → moods; source ANALYSIS, confidence 0.6 or 0.4 with a weak beat grid). Re-tagging replaces
+  only that source's rows, so user tags (v2) survive. Songs analysed before stage 10 are tagged (without
+  lyrics) the next time a mix uses them.
+- **More song sources** (§7.1): the user's liked and library songs (Metrolist's database, read only; capped
+  at a quarter of the mix) and YouTube Music's Home mood chip that fits the mood (Party/Energize, Relax,
+  Romance, Commute/Feel good, Workout, Sad), through the same Home browse call Metrolist makes when the chip is
+  tapped: no new endpoint. These sources are not chosen by language, so their songs need proof of a selected
+  language (a language tag; for English, Latin script with no Indian evidence at all).
+- **Not done, for the owner to decide:** charts as a source (Metrolist only opens charts through the Explore
+  page; a direct charts browse id would be a new endpoint call, so not added); whether DJ plays should appear
+  in Metrolist's listening history / scrobbles (not recorded there now). §5.1 "a song added to the queue is
+  analysed at once": v1's queue has no "add" (remove and reorder only), so nothing to do yet.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

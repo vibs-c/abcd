@@ -19,6 +19,19 @@ data class TrackSummaryRow(
     val analyzedAt: Long,
 )
 
+/** Thumbs up minus thumbs down for one technique. */
+data class TechniqueScoreRow(
+    val technique: String,
+    val score: Int,
+)
+
+/** Thumbs up minus thumbs down for one song pair. */
+data class PairScoreRow(
+    val fromVideoId: String,
+    val toVideoId: String,
+    val score: Int,
+)
+
 @Dao
 interface DjDao {
     // ---- analysis -------------------------------------------------------------------------------
@@ -97,6 +110,93 @@ interface DjDao {
 
     @Query("SELECT COUNT(*) FROM dj_session")
     suspend fun sessionCount(): Int
+
+    // ---- tags (stage 10) --------------------------------------------------------------------------
+    @Query("SELECT * FROM track_tag WHERE videoId = :videoId")
+    suspend fun tags(videoId: String): List<TrackTagEntity>
+
+    @Query("DELETE FROM track_tag WHERE videoId = :videoId AND source = :source")
+    suspend fun deleteTags(
+        videoId: String,
+        source: String,
+    )
+
+    @Upsert
+    suspend fun upsertTags(tags: List<TrackTagEntity>)
+
+    /** Replaces the tags one source gave [videoId]; other sources' tags (the user's above all) stay. */
+    @Transaction
+    suspend fun replaceTags(
+        videoId: String,
+        source: String,
+        tags: List<TrackTagEntity>,
+    ) {
+        deleteTags(videoId, source)
+        if (tags.isNotEmpty()) upsertTags(tags)
+    }
+
+    // ---- transition feedback ----------------------------------------------------------------------
+    @Insert
+    suspend fun insertTransitionFeedback(entity: TransitionFeedbackEntity): Long
+
+    @Query("UPDATE transition_feedback SET outcome = :outcome WHERE id = :id")
+    suspend fun setTransitionOutcome(
+        id: Long,
+        outcome: String,
+    )
+
+    @Query(
+        "SELECT technique AS technique, SUM(CASE outcome WHEN 'THUMBS_UP' THEN 1 WHEN 'THUMBS_DOWN' THEN -1 ELSE 0 END) AS score " +
+            "FROM transition_feedback GROUP BY technique",
+    )
+    suspend fun techniqueScores(): List<TechniqueScoreRow>
+
+    @Query(
+        "SELECT fromVideoId AS fromVideoId, toVideoId AS toVideoId, " +
+            "SUM(CASE outcome WHEN 'THUMBS_UP' THEN 1 WHEN 'THUMBS_DOWN' THEN -1 ELSE 0 END) AS score " +
+            "FROM transition_feedback GROUP BY fromVideoId, toVideoId HAVING score != 0",
+    )
+    suspend fun pairScores(): List<PairScoreRow>
+
+    // ---- track feedback ---------------------------------------------------------------------------
+    @Query(
+        "INSERT OR IGNORE INTO track_feedback (videoId, playCount, skipCount, djPlayCount, removeCount, banned, lastPlayedAt) " +
+            "VALUES (:videoId, 0, 0, 0, 0, 0, NULL)",
+    )
+    suspend fun ensureTrackFeedback(videoId: String)
+
+    @Query("UPDATE track_feedback SET djPlayCount = djPlayCount + 1, lastPlayedAt = :now WHERE videoId = :videoId")
+    suspend fun addDjPlay(
+        videoId: String,
+        now: Long,
+    )
+
+    @Query("UPDATE track_feedback SET skipCount = skipCount + 1 WHERE videoId = :videoId")
+    suspend fun addSkip(videoId: String)
+
+    @Query("UPDATE track_feedback SET removeCount = removeCount + 1 WHERE videoId = :videoId")
+    suspend fun addRemove(videoId: String)
+
+    @Query("UPDATE track_feedback SET banned = :banned WHERE videoId = :videoId")
+    suspend fun setBanned(
+        videoId: String,
+        banned: Boolean,
+    )
+
+    /** Only rows that change anything: skipped, removed or banned tracks. */
+    @Query("SELECT * FROM track_feedback WHERE skipCount > 0 OR removeCount > 0 OR banned = 1")
+    suspend fun trackFeedbackWithVerdicts(): List<TrackFeedbackEntity>
+
+    // ---- sessions ---------------------------------------------------------------------------------
+    @Insert
+    suspend fun insertSession(entity: DjSessionEntity): Long
+
+    @Query("UPDATE dj_session SET endedAt = :endedAt, tracksPlayedJson = :tracksPlayedJson WHERE id = :id")
+    suspend fun updateSession(
+        id: Long,
+        endedAt: Long?,
+        tracksPlayedJson: String,
+    )
 
     // ---- one atomic save --------------------------------------------------------------------------
 

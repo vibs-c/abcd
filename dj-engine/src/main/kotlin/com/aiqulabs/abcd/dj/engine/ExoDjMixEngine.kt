@@ -250,7 +250,7 @@ class ExoDjMixEngine(
             if (skipRequested) {
                 skipRequested = false
                 val skip = mix.planner.planSkip(current, next, m.positionMs, mix.settings)
-                begin(skip, skip.outgoingExitMs)
+                begin(skip, skip.outgoingExitMs, byUser = true)
                 return
             }
             if (!isPlayingNow() && !m.hasEnded) return
@@ -280,6 +280,7 @@ class ExoDjMixEngine(
     private fun begin(
         plan: TransitionPlan,
         exitMs: Long,
+        byUser: Boolean = false,
     ) {
         val d = decks ?: return
         val from = d[main]
@@ -298,7 +299,7 @@ class ExoDjMixEngine(
             running.incomingStarted = true
         }
         Log.i(TAG, "Transition ${fromTrack.track.title} -> ${toTrack.track.title}: ${plan.reason}")
-        emit(DjEngineEvent.TransitionStarted(fromTrack.track, toTrack.track, plan))
+        emit(DjEngineEvent.TransitionStarted(fromTrack.track, toTrack.track, plan, byUser))
         applyVolumes()
         publish()
     }
@@ -385,9 +386,14 @@ class ExoDjMixEngine(
         val head = tracks.take(currentIndex + 1)
         val rest = tracks.drop(currentIndex + 1).filterIndexed { i, _ -> (currentIndex + 1 + i) !in unplayable }
         val byId = rest.associateBy { it.track.videoId }
+        val loadedNext = d[1 - main].track?.track?.videoId
         tracks = head + upcomingVideoIds.mapNotNull(byId::get)
         unplayable.removeAll { it > currentIndex }
-        d[1 - main].clear()
+        // The song already cued on the free deck stays when it is still next (no reload, no gap).
+        if (loadedNext == null || loadedNext != tracks.getOrNull(currentIndex + 1)?.track?.videoId) {
+            loadJob?.cancel()
+            d[1 - main].clear()
+        }
         preloadNext()
         publish()
     }

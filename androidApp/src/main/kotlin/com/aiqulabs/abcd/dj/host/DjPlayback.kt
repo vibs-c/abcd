@@ -19,6 +19,11 @@ object DjPlayback {
     private val mutableState = MutableStateFlow<DjEngineState?>(null)
     val state: StateFlow<DjEngineState?> = mutableState.asStateFlow()
 
+    private val mutableLastTransition = MutableStateFlow<DjRateableTransition?>(null)
+
+    /** The latest transition of the running mix, for the thumbs on the live screen. */
+    val lastTransition: StateFlow<DjRateableTransition?> = mutableLastTransition.asStateFlow()
+
     @Volatile internal var host: DjPlaybackHost? = null
 
     val isActive: Boolean get() = host?.isActive == true
@@ -43,6 +48,24 @@ object DjPlayback {
         host?.skipNext()
     }
 
+    fun rateLastTransition(up: Boolean) {
+        host?.rateLastTransition(up)
+    }
+
+    fun removeUpcoming(
+        videoId: String,
+        neverPlay: Boolean = false,
+    ) {
+        host?.removeUpcoming(videoId, neverPlay)
+    }
+
+    fun moveUpcoming(
+        videoId: String,
+        by: Int,
+    ) {
+        host?.moveUpcoming(videoId, by)
+    }
+
     /** "End session". */
     fun end() {
         host?.exit()
@@ -50,5 +73,9 @@ object DjPlayback {
 
     internal fun publish(state: DjEngineState?) {
         mutableState.value = state
+    }
+
+    internal fun publishLastTransition(transition: DjRateableTransition?) {
+        mutableLastTransition.value = transition
     }
 }
