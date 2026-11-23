@@ -599,6 +599,24 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
 - **Merged `feat/dj-mode-v1` into `main`** and tagged `v1.0.0-alpha1`.
 - README gains a v2/v3 roadmap; `CHANGELOG.md` added; `SECURITY.md` no longer points at upstream's email.
 
+## 2026-11-23 · Hotfix 1.0.0-alpha2: YouTube refuses web-client streams after one minute
+
+- **Symptom (owner, phone):** "Could not build the mix … SabrProtocolException: SABR stream protection requires
+  attestation". Reproduced on the emulator signed out, so not tied to sign-in.
+- **Cause:** YouTube now answers HTTP 403 for `WEB_REMIX__po` direct streams beyond about the first minute
+  (byte ~983 040, the 5th player range), even with a valid PO token. Normal playback hits the same 403 at 59 s, then
+  reports it (`StreamResolver.reportPlaybackFailure`, client set aside for 2 min) and continues on the tokenless
+  `VISIONOS` client. DJ downloads did not report it, and their retry forced SABR, which YouTube keeps
+  attestation-pending: every song failed.
+- **Fix:** `DjAudioProvider` resolves without forcing SABR, reports each refused download to the resolver and retries
+  (3 attempts), so later attempts get a working client; `AudioCacheManager.downloadToFile` (abcd's function) now reads
+  direct streams with `HttpRangeInputStream` like playback (player HTTP client, sequential bounded ranges) before the
+  old parallel-range path. InnerTubeX v0.13.0 + upstream `702d5245` (progressive fallback) included.
+- **Result:** emulator, English/Party/Chorus Hits: 48 of 48 prepared in 167 s; after the first 2 refusals every
+  download took about 1.5 s; mix plays with beat-matched blends.
+- **Known, upstream:** normal playback still has a brief hiccup at about 1:00 on the first song that uses the web client;
+  the player recovers by itself. Revisit after the Metrolist sync.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

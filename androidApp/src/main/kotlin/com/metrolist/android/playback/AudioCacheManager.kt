@@ -37,6 +37,7 @@ import com.metrolist.shared.playback.PlaybackPreCache
 import com.metrolist.shared.playback.canReuseCachedAudio
 import com.metrolist.shared.playback.downloadSabrAudio
 import com.metrolist.shared.playback.ffmpeg.DirectPlaybackCache
+import com.metrolist.shared.playback.ffmpeg.HttpRangeInputStream
 import com.metrolist.shared.playback.ffmpeg.SabrInputStream
 import com.metrolist.shared.settings.Settings
 import com.metrolist.shared.storage.audioCacheBudget
@@ -879,12 +880,15 @@ class AudioCacheManager(
                         }
                         checkNotNull(resource.sabrBootstrap).mimeType.substringBefore(';')
                     } else {
-                        downloadWithRangeFallback(
-                            control = control,
-                            range = { downloadWithRanges(resource, target, control, onProgress) },
-                            single = { downloadSingleStream(resource, target, control, onProgress, MAX_AUDIO_BYTES) },
-                            onRangeFailure = { Timber.tag(TAG).w(it, "range download failed, falling back to single stream") },
-                        )
+                        // abcd (2026-11-23): YouTube now refuses parallel or whole-file range requests for these links
+                        // (HTTP 403) while the player's sequential ranges still work, so fetch exactly like the player.
+                        downloadLikePlayer(resource, target, control, onProgress)
+                            ?: downloadWithRangeFallback(
+                                control = control,
+                                range = { downloadWithRanges(resource, target, control, onProgress) },
+                                single = { downloadSingleStream(resource, target, control, onProgress, MAX_AUDIO_BYTES) },
+                                onRangeFailure = { Timber.tag(TAG).w(it, "range download failed, falling back to single stream") },
+                            )
                     }
                 check(target.length() >= MIN_AUDIO_BYTES) { "Downloaded audio is too small" }
                 mimeType
@@ -901,6 +905,48 @@ class AudioCacheManager(
                 throw e
             }
         }
+
+    /**
+     * abcd: reads a direct HTTPS stream the way playback does (`HttpRangeInputStream`: the player's HTTP client and
+     * redirect handling, one bounded range at a time, in order) and writes it to [target]. Returns the MIME type, or
+     * null when the size is unknown (the caller then uses the older range download). Failures propagate.
+     */
+    private suspend fun downloadLikePlayer(
+        resource: PlaybackResource,
+        target: File,
+        control: AudioDownloadControl?,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ): String? {
+        val totalBytes = resource.contentLengthBytes?.takeIf { it > 0L } ?: return null
+        if (!resource.url.startsWith("https://")) return null
+        check(totalBytes <= MAX_AUDIO_BYTES) { "Audio exceeds cache budget" }
+        validateDownloadSize(target, totalBytes)
+        Timber.tag(TAG).d("sequential download start videoId=%s bytes=%d", resource.videoId, totalBytes)
+        withContext(Dispatchers.IO) {
+            HttpRangeInputStream(
+                url = resource.url,
+                requestHeaders = resource.headers,
+                mediaSize = totalBytes,
+                chunkSize = directMediaChunkSize(resource, video = false),
+            ).use { input ->
+                target.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var written = 0L
+                    while (written < totalBytes) {
+                        control?.awaitIfPaused()
+                        currentCoroutineContext().ensureActive()
+                        val read = input.read(buffer, 0, buffer.size)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        written += read
+                        onProgress(written, totalBytes)
+                    }
+                    check(written == totalBytes) { "Stream ended at $written of $totalBytes bytes" }
+                }
+            }
+        }
+        return resource.mimeType?.substringBefore(';') ?: "audio/webm"
+    }
 
     @OptIn(ExperimentalCoilApi::class)
     private suspend fun storeAudioFile(

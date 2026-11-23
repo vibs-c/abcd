@@ -6,7 +6,7 @@
 
 Built for house parties and road trips, India first: Hindi, English, Punjabi, Tamil, Telugu and more.
 
-![Version](https://img.shields.io/badge/version-1.0.0--alpha1-orange?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.0--alpha2-orange?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
 
@@ -131,7 +131,7 @@ engine design ([`DJ_ENGINE_DESIGN.md`](docs/DJ_ENGINE_DESIGN.md)), the build pla
 
 ## Status
 
-abcd is in **alpha** (`1.0.0-alpha1`), Android only, and distributed as an APK. v1 is complete:
+abcd is in **alpha** (`1.0.0-alpha2`), Android only, and distributed as an APK. v1 is complete:
 analysis, the two-deck engine, beat-matched and echo transitions with a bass swap, the live screen with
 its timeline, and learning from feedback. What changed in each version is in [`CHANGELOG.md`](CHANGELOG.md);
 the build plan is in [`docs/STAGES.md`](docs/STAGES.md).

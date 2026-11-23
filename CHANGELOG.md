@@ -2,6 +2,17 @@
 
 All notable changes to abcd. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.0.0-alpha2 · 2026-11-23
+
+### Fixed
+- **"Could not build the mix … SABR stream protection requires attestation"**: since about 20 November YouTube
+  stops serving a song through its web player client after the first minute (HTTP 403), so every song failed to
+  download for analysis. Downloads now fetch the way playback does, report a refused client, and retry through
+  one that still works (as normal playback does). Mixes prepare again: 48 of 48 songs on the test device.
+- Updated the YouTube library (InnerTubeX v0.11.7 → v0.13.0): it stops picking two web stream types YouTube now
+  refuses on signed-in Android phones, plays re-released songs under their new IDs, and fixes some ciphered
+  streams. Normal playback can fall back to a lower-quality stream as a last resort.
+
 ## 1.0.0-alpha1 · 2026-11-22
 
 The first alpha of abcd's DJ Mode.
