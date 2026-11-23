@@ -6,7 +6,6 @@
 package com.metrolist.shared.ui.menu
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,6 +81,7 @@ import com.metrolist.shared.generated.resources.subscribers
 import com.metrolist.shared.generated.resources.title
 import com.metrolist.shared.generated.resources.total_listening
 import com.metrolist.shared.generated.resources.total_time_listening
+import com.metrolist.shared.generated.resources.upload_date
 import com.metrolist.shared.generated.resources.video_stats_resolution
 import com.metrolist.shared.generated.resources.video_stats_video_codec
 import com.metrolist.shared.generated.resources.views
@@ -94,6 +94,7 @@ import com.metrolist.shared.state.GlobalYouTubeRepository
 import com.metrolist.shared.ui.components.Scrollbar
 import com.metrolist.shared.ui.components.images.AsyncImage
 import com.metrolist.shared.ui.components.loadingShimmer
+import com.metrolist.shared.ui.components.playbackMarquee
 import com.metrolist.shared.ui.icons.MetrolistIcons
 import com.metrolist.shared.ui.screens.statisticsDuration
 import com.metrolist.shared.ui.statistics.StatisticsFormatter
@@ -155,12 +156,13 @@ fun SongDetailsContent(
         }
         val storedSong = localSong?.song
         val storedFormat = localSong?.format
-        val title = storedSong?.title ?: song.title
+        val title = storedSong?.customTitle ?: storedSong?.title ?: song.title
         val artistText =
-            localSong
-                ?.orderedArtists
-                ?.joinToString(", ") { it.name }
-                ?.takeIf { it.isNotBlank() }
+            storedSong?.customArtist?.takeIf(String::isNotBlank)
+                ?: localSong
+                    ?.orderedArtists
+                    ?.joinToString(", ") { it.name }
+                    ?.takeIf { it.isNotBlank() }
                 ?: song.artists.joinToString(", ") { it.displayName }
         val albumText = storedSong?.albumName ?: localSong?.album?.title ?: song.album?.name
         val duration = storedSong?.duration?.takeIf { it >= 0 }?.toLong() ?: song.duration
@@ -282,6 +284,7 @@ fun SongDetailsContent(
                     playerInformationLoading || watchInformationLoading,
                 )
                 addValue(stringResource(Res.string.likes), watchInformation?.likeCount?.let(numbers::number), watchInformationLoading)
+                addValue(stringResource(Res.string.upload_date), watchInformation?.uploadDate, watchInformationLoading)
                 addValue(
                     stringResource(Res.string.artist),
                     watchInformation?.artist ?: playerInformation?.artist ?: artistText.takeIf { it.isNotBlank() },
@@ -355,7 +358,7 @@ private fun SongDetailsHeader(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(),
+                modifier = Modifier.playbackMarquee(),
             )
             Text(
                 text = subtitle,
@@ -363,7 +366,7 @@ private fun SongDetailsHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(),
+                modifier = Modifier.playbackMarquee(),
             )
         }
     }

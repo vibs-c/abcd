@@ -54,7 +54,7 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 @Composable
-private fun SettingsDialogSurface(
+internal fun SettingsDialogSurface(
     onDismiss: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -191,7 +191,7 @@ internal fun SettingsConfirmationDialog(
     SettingsConfirmDialog(
         title = item.title,
         message = item.confirmationMessage,
-        confirmLabel = stringResource(Res.string.clear),
+        confirmLabel = item.valueLabel ?: stringResource(Res.string.clear),
         onConfirm = {
             item.onClick?.invoke()
             onSettingValueChanged()

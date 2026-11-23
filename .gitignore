@@ -98,3 +98,4 @@ HANDOFF.md
 graphify-out/
 # abcd test APKs
 apk/
+/*.flatpak

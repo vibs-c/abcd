@@ -11,12 +11,15 @@ import androidx.compose.runtime.setValue
 import com.metrolist.desktop.state.app.AppState
 import com.metrolist.desktop.state.app.DesktopNavigation
 import com.metrolist.desktop.state.playback.PlayerState
+import com.metrolist.desktop.storage.DownloadManager
 import com.metrolist.innertubex.InnerTube
 import com.metrolist.innertubex.InnerTubeHttpException
 import com.metrolist.shared.api.PlaylistNotFoundException
+import com.metrolist.shared.api.YouTubeRepository
 import com.metrolist.shared.api.playlistSongs
 import com.metrolist.shared.db.MusicDatabase
 import com.metrolist.shared.db.emptyHistoryPlaylist
+import com.metrolist.shared.db.entities.toPlaylistItem
 import com.metrolist.shared.db.entities.toSongItem
 import com.metrolist.shared.db.loadAndCachePlaylistPage
 import com.metrolist.shared.db.refreshHistoryPlaylist
@@ -24,10 +27,12 @@ import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.error_occurred
 import com.metrolist.shared.generated.resources.playlist_removed_from_youtube
 import com.metrolist.shared.model.AlbumPage
+import com.metrolist.shared.model.EpisodeItem
 import com.metrolist.shared.model.PlaylistItem
 import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.YTItem
 import com.metrolist.shared.model.moveSelection
+import com.metrolist.shared.model.preservePlaylistOccurrenceMappings
 import com.metrolist.shared.playlist.PlaylistChanges
 import com.metrolist.shared.playlist.PlaylistPartiallyUpdatedException
 import com.metrolist.shared.playlist.addSongToStoredPlaylist
@@ -40,10 +45,12 @@ import com.metrolist.shared.playlist.setStoredPlaylistCover
 import com.metrolist.shared.playlist.updateStoredPlaylist
 import com.metrolist.shared.playlist.uploadStoredPlaylistCover
 import com.metrolist.shared.settings.BlockedContent
+import com.metrolist.shared.settings.Settings
 import com.metrolist.shared.state.GlobalYouTube
 import com.metrolist.shared.state.GlobalYouTubeRepository
 import com.metrolist.shared.ui.navigation.Screen
 import com.metrolist.shared.youtube.logging.YtLogger
+import com.metrolist.shared.youtube.playback.PlaybackNetworkStateStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -121,6 +128,7 @@ object PlaylistAlbumState {
         id: String,
         thumbnailHint: String? = null,
         addToHistory: Boolean = true,
+        forceRefresh: Boolean = false,
     ) {
         pendingPlaylistReorder = null
         PodcastState.clear()
@@ -142,155 +150,174 @@ object PlaylistAlbumState {
         playlistLoadJob?.cancel()
         playlistLoadJob =
             AppState.scope.launch {
-                try {
-                    val localPlaylist =
-                        withContext(Dispatchers.IO) {
-                            database.refreshHistoryPlaylist(id)
-                            database.dao().playlist(id).first()
-                                ?: database.dao().playlistByBrowseId(id.removePrefix("VL")).first()
-                                ?: database.dao().playlistByBrowseId(id).first()
-                        }
-                    if (localPlaylist != null) {
-                        val localSongs =
-                            withContext(Dispatchers.IO) {
-                                database.dao().playlistSongs(localPlaylist.id).first()
-                            }
-                        val headerItem =
-                            PlaylistItem(
-                                id = localPlaylist.playlist.browseId ?: localPlaylist.id,
-                                title = localPlaylist.title,
-                                thumbnail = localPlaylist.playlist.customThumbnailUrl ?: thumbnailHint ?: localPlaylist.thumbnailUrl,
-                                customThumbnail = localPlaylist.playlist.customThumbnailUrl,
-                                author = null,
-                                songCount = localSongs.size.toString(),
-                                isEditable = localPlaylist.playlist.isEditable,
-                                description = localPlaylist.playlist.description,
-                                isLocal = localPlaylist.playlist.isLocal || localPlaylist.playlist.browseId == null,
-                            )
-                        val songItems =
-                            localSongs.map {
-                                it.toSongItem().copy(
-                                    playlistLocalMappingId = if (headerItem.isLocal) it.map.id else null,
-                                )
-                            }
-                        if (selectedPlaylistId == id) {
-                            playlistHasMore = !hasCompleteStoredPlaylist(localPlaylist.playlist, songItems.size)
-                            playlistDurationComplete = !playlistHasMore
-                            playlistTrackCount = songItems.size
-                            isPlaylistBookmarked = localPlaylist.playlist.bookmarkedAt != null
-                            unfilteredPlaylistData = mapOf("header" to listOf(headerItem), "songs" to songItems)
-                            playlistData = unfilteredPlaylistData.withoutBlockedContent()
-                        }
-                        if (localPlaylist.playlist.isLocal || localPlaylist.playlist.browseId == null) return@launch
-                    }
+                loadPlaylistData(id, thumbnailHint, forceRefresh, database) { GlobalYouTubeRepository.instance }
+            }
+    }
 
-                    if (localPlaylist == null) {
-                        emptyHistoryPlaylist(id)?.let { header ->
-                            if (selectedPlaylistId == id) {
-                                playlistHasMore = false
-                                playlistTrackCount = 0
-                                isPlaylistBookmarked = false
-                                playlistDurationComplete = true
-                                unfilteredPlaylistData = mapOf("header" to listOf(header), "songs" to emptyList())
-                                playlistData = unfilteredPlaylistData
-                            }
-                            return@launch
-                        }
+    internal suspend fun loadPlaylistData(
+        id: String,
+        thumbnailHint: String? = null,
+        forceRefresh: Boolean = false,
+        database: MusicDatabase,
+        repository: () -> YouTubeRepository,
+    ) {
+        val previousPlaylistSongs = unfilteredPlaylistData.playlistSongs().takeIf { selectedPlaylistId == id }.orEmpty()
+        var invocationPlaylistSongs = previousPlaylistSongs
+        try {
+            val localPlaylist =
+                withContext(Dispatchers.IO) {
+                    database.refreshHistoryPlaylist(id)
+                    database.dao().playlist(id).first()
+                        ?: database.dao().playlistByBrowseId(id.removePrefix("VL")).first()
+                        ?: database.dao().playlistByBrowseId(id).first()
+                }
+            if (localPlaylist != null) {
+                val localSongs =
+                    withContext(Dispatchers.IO) {
+                        database.dao().playlistSongs(localPlaylist.id).first()
                     }
-                    val targetFetchId = localPlaylist?.playlist?.browseId ?: id
-                    val loadedPage =
-                        withContext(Dispatchers.IO) {
-                            database.loadAndCachePlaylistPage(GlobalYouTubeRepository.instance, targetFetchId) { firstPage ->
-                                val customCover = database.dao().findPlaylistEntity(id)?.customThumbnailUrl
-                                val header = firstPage.sections["header"]?.firstOrNull() as? PlaylistItem
-                                val sections =
-                                    if (customCover != null && header != null) {
-                                        firstPage.sections +
-                                            ("header" to listOf(header.copy(thumbnail = customCover, customThumbnail = customCover)))
-                                    } else {
-                                        firstPage.sections
-                                    }
-                                withContext(Dispatchers.Main) {
-                                    if (selectedPlaylistId == id) {
-                                        if (playlistHasMore || unfilteredPlaylistData.playlistSongs().isEmpty()) {
-                                            playlistHasMore = firstPage.hasMore
-                                            playlistDurationComplete = !firstPage.hasMore && !firstPage.isOffline
-                                            playlistTrackCount = firstPage.songs.size
-                                            unfilteredPlaylistData = sections
-                                            playlistData = unfilteredPlaylistData.withoutBlockedContent()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    val unfilteredResult = loadedPage.sections
-                    val playlist = unfilteredResult["header"]?.firstOrNull() as? PlaylistItem
-                    val storedCustom =
-                        withContext(Dispatchers.IO) {
-                            val entity =
-                                localPlaylist?.playlist
-                                    ?: database.dao().findPlaylistEntity(id)
-                                    ?: database.dao().findPlaylistEntity(id.removePrefix("VL"))
-                            entity?.customThumbnailUrl
-                        }
-                    val effectivePlaylist =
-                        if (storedCustom.isNullOrBlank()) {
-                            playlist
-                        } else {
-                            playlist?.copy(thumbnail = storedCustom, customThumbnail = storedCustom)
-                        }
-                    val isBookmarked =
-                        if (effectivePlaylist == null) {
-                            false
-                        } else {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    val entity =
-                                        localPlaylist?.playlist
-                                            ?: database.dao().findPlaylistEntity(id)
-                                            ?: database.dao().findPlaylistEntity(id.removePrefix("VL"))
-                                    entity?.let {
-                                        database.dao().update(
-                                            it.copy(
-                                                name = effectivePlaylist.title,
-                                                description = effectivePlaylist.description,
-                                                thumbnailUrl = playlist?.thumbnail ?: it.thumbnailUrl,
-                                                isEditable = effectivePlaylist.isEditable,
-                                            ),
-                                        )
-                                    }
-                                    entity?.bookmarkedAt != null
-                                }
-                            }.getOrDefault(false)
-                        }
-                    if (selectedPlaylistId == id) {
-                        playlistHasMore = false
-                        playlistDurationComplete = !loadedPage.hasMore && !loadedPage.isOffline
-                        playlistTrackCount = unfilteredResult.playlistSongs().size
-                        isPlaylistBookmarked = isBookmarked
-                        unfilteredPlaylistData =
-                            if (effectivePlaylist == null) {
-                                unfilteredResult
-                            } else {
-                                unfilteredResult + ("header" to listOf(effectivePlaylist))
-                            }
-                        playlistData = unfilteredPlaylistData.withoutBlockedContent()
+                val headerItem =
+                    localPlaylist.playlist.toPlaylistItem(localSongs.size).copy(
+                        thumbnail = localPlaylist.playlist.customThumbnailUrl ?: thumbnailHint ?: localPlaylist.thumbnailUrl,
+                    )
+                val songItems =
+                    localSongs.map {
+                        it.toSongItem().copy(
+                            playlistLocalMappingId = if (headerItem.isLocal) it.map.id else null,
+                            playlistOccurrenceId = "local:${it.map.id}",
+                        )
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    if (selectedPlaylistId == id) {
-                        if (e is PlaylistNotFoundException) {
-                            playlistData = emptyMap()
-                            unfilteredPlaylistData = emptyMap()
-                            isPlaylistBookmarked = false
-                        }
-                        playlistLoadError = e
-                    }
-                } finally {
-                    if (selectedPlaylistId == id && currentCoroutineContext().isActive) isPlaylistLoading = false
+                invocationPlaylistSongs = songItems
+                if (selectedPlaylistId == id) {
+                    playlistHasMore = !hasCompleteStoredPlaylist(localPlaylist.playlist, songItems)
+                    playlistDurationComplete = !playlistHasMore
+                    playlistTrackCount = songItems.size
+                    isPlaylistBookmarked = localPlaylist.playlist.bookmarkedAt != null
+                    unfilteredPlaylistData = mapOf("header" to listOf(headerItem), "songs" to songItems)
+                    playlistData = unfilteredPlaylistData.withoutBlockedContent()
+                }
+                if (localPlaylist.playlist.isLocal || localPlaylist.playlist.browseId == null ||
+                    (
+                        !forceRefresh && PlaybackNetworkStateStore.current.connected &&
+                            hasCompleteStoredPlaylist(localPlaylist.playlist, songItems)
+                    )
+                ) {
+                    return
                 }
             }
+
+            if (localPlaylist == null) {
+                emptyHistoryPlaylist(id)?.let { header ->
+                    if (selectedPlaylistId == id) {
+                        playlistHasMore = false
+                        playlistTrackCount = 0
+                        isPlaylistBookmarked = false
+                        playlistDurationComplete = true
+                        unfilteredPlaylistData = mapOf("header" to listOf(header), "songs" to emptyList())
+                        playlistData = unfilteredPlaylistData
+                    }
+                    return
+                }
+            }
+            val targetFetchId = localPlaylist?.playlist?.browseId ?: id
+            val loadedPage =
+                withContext(Dispatchers.IO) {
+                    database.loadAndCachePlaylistPage(repository(), targetFetchId) { firstPage ->
+                        val customCover = database.dao().findPlaylistEntity(id)?.customThumbnailUrl
+                        val header = firstPage.sections["header"]?.firstOrNull() as? PlaylistItem
+                        val sections =
+                            if (customCover != null && header != null) {
+                                firstPage.sections +
+                                    ("header" to listOf(header.copy(thumbnail = customCover, customThumbnail = customCover)))
+                            } else {
+                                firstPage.sections
+                            }
+                        withContext(Dispatchers.Main) {
+                            if (selectedPlaylistId == id) {
+                                if (playlistHasMore || unfilteredPlaylistData.playlistSongs().isEmpty()) {
+                                    playlistHasMore = firstPage.hasMore
+                                    playlistDurationComplete = !firstPage.hasMore && !firstPage.isOffline
+                                    playlistTrackCount = firstPage.songs.size
+                                    unfilteredPlaylistData =
+                                        sections.withPlaylistSongs(
+                                            sections.playlistSongs().preservePlaylistOccurrenceMappings(invocationPlaylistSongs),
+                                        )
+                                    playlistData = unfilteredPlaylistData.withoutBlockedContent()
+                                }
+                            }
+                        }
+                    }
+                }
+            val unfilteredResult =
+                loadedPage.sections.let { sections ->
+                    sections.withPlaylistSongs(
+                        sections.playlistSongs().preservePlaylistOccurrenceMappings(invocationPlaylistSongs),
+                    )
+                }
+            val playlist = unfilteredResult["header"]?.firstOrNull() as? PlaylistItem
+            val storedCustom =
+                withContext(Dispatchers.IO) {
+                    val entity =
+                        database.dao().findPlaylistEntity(id)
+                            ?: database.dao().findPlaylistEntity(id.removePrefix("VL"))
+                    entity?.customThumbnailUrl
+                }
+            val effectivePlaylist =
+                if (storedCustom.isNullOrBlank()) {
+                    playlist
+                } else {
+                    playlist?.copy(thumbnail = storedCustom, customThumbnail = storedCustom)
+                }
+            val isBookmarked =
+                if (effectivePlaylist == null) {
+                    false
+                } else {
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            val entity =
+                                database.dao().findPlaylistEntity(id)
+                                    ?: database.dao().findPlaylistEntity(id.removePrefix("VL"))
+                            entity?.let {
+                                database.dao().update(
+                                    it.copy(
+                                        name = effectivePlaylist.title,
+                                        description = effectivePlaylist.description,
+                                        thumbnailUrl = playlist?.thumbnail ?: it.thumbnailUrl,
+                                        isEditable = effectivePlaylist.isEditable,
+                                    ),
+                                )
+                            }
+                            entity?.bookmarkedAt != null
+                        }
+                    }.getOrDefault(false)
+                }
+            if (selectedPlaylistId == id) {
+                playlistHasMore = false
+                playlistDurationComplete = !loadedPage.hasMore && !loadedPage.isOffline
+                playlistTrackCount = unfilteredResult.playlistSongs().size
+                isPlaylistBookmarked = isBookmarked
+                unfilteredPlaylistData =
+                    if (effectivePlaylist == null) {
+                        unfilteredResult
+                    } else {
+                        unfilteredResult + ("header" to listOf(effectivePlaylist))
+                    }
+                playlistData = unfilteredPlaylistData.withoutBlockedContent()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (selectedPlaylistId == id) {
+                if (e is PlaylistNotFoundException) {
+                    playlistData = emptyMap()
+                    unfilteredPlaylistData = emptyMap()
+                    isPlaylistBookmarked = false
+                }
+                playlistLoadError = e
+            }
+        } finally {
+            if (selectedPlaylistId == id && currentCoroutineContext().isActive) isPlaylistLoading = false
+        }
     }
 
     fun withCompletePlaylist(action: (List<SongItem>) -> Unit) {
@@ -317,14 +344,65 @@ object PlaylistAlbumState {
                     withContext(Dispatchers.IO) {
                         setStoredPlaylistBookmarked(database, GlobalYouTubeRepository.instance, id, playlist, bookmarked, songCount)
                     }
-                if (selectedPlaylistId != id) return@launch
                 if (result.isSuccess) {
-                    isPlaylistBookmarked = bookmarked
-                    LibraryContentState.fetchLibraryData()
-                } else {
+                    if (selectedPlaylistId == id) {
+                        isPlaylistBookmarked = bookmarked
+                        LibraryContentState.fetchLibraryData()
+                    }
+                    if (bookmarked && Settings.shared.autoDownloadSavedCollections) {
+                        downloadBookmarkedPlaylist(id)
+                    }
+                } else if (selectedPlaylistId == id) {
                     AppState.snackbarHostState.showSnackbar(getString(Res.string.error_occurred))
                 }
             }
+    }
+
+    private fun downloadBookmarkedPlaylist(id: String) {
+        val activeLoad = playlistLoadJob.takeIf { selectedPlaylistId == id }
+        AppState.scope.launch {
+            try {
+                activeLoad?.join()
+                val playlist =
+                    withContext(Dispatchers.IO) {
+                        database.dao().playlist(id).first()
+                            ?: database.dao().playlistByBrowseId(id.removePrefix("VL")).first()
+                            ?: database.dao().playlistByBrowseId(id).first()
+                    }
+                val storedSongs =
+                    playlist
+                        ?.let {
+                            withContext(Dispatchers.IO) {
+                                database
+                                    .dao()
+                                    .playlistSongs(it.id)
+                                    .first()
+                                    .map { song -> song.toSongItem() }
+                            }
+                        }.orEmpty()
+                val songs =
+                    if (playlist?.playlist?.isLocal == true) {
+                        storedSongs
+                    } else if (playlist != null && hasCompleteStoredPlaylist(playlist.playlist, storedSongs)) {
+                        storedSongs
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            val repository = GlobalYouTubeRepository.instance
+                            val firstPage = database.loadAndCachePlaylistPage(repository, id)
+                            if (firstPage.hasMore) {
+                                repository.completePlaylistPage(firstPage, applyContentFilters = false).songs
+                            } else {
+                                firstPage.songs
+                            }
+                        }
+                    }
+                DownloadManager.downloadAll(BlockedContent.filterSongs(songs))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppState.snackbarHostState.showSnackbar(getString(Res.string.error_occurred))
+            }
+        }
     }
 
     fun restoreAlbum(id: String): Boolean {
@@ -455,21 +533,24 @@ object PlaylistAlbumState {
         }
     }
 
-    fun deleteSelectedPlaylist(onResult: (Result<Unit>) -> Unit) {
+    fun deleteSelectedPlaylist(
+        id: String,
+        onResult: (Result<Unit>) -> Unit,
+    ) {
+        if (selectedPlaylistId != id) return onResult(Result.failure(IllegalStateException("Playlist is unavailable")))
         playlistLoadJob?.cancel()
         isPlaylistLoading = false
-        val id =
-            selectedPlaylistId
-                ?: return onResult(Result.failure(IllegalStateException("Playlist is unavailable")))
         AppState.scope.launch {
             val result =
                 withContext(Dispatchers.IO) {
                     deleteStoredPlaylist(database, GlobalYouTubeRepository.instance, id)
                 }
             if (result.isSuccess) {
-                selectedPlaylistId = null
-                unfilteredPlaylistData = emptyMap()
-                playlistData = emptyMap()
+                if (selectedPlaylistId == id) {
+                    selectedPlaylistId = null
+                    unfilteredPlaylistData = emptyMap()
+                    playlistData = emptyMap()
+                }
                 LibraryContentState.fetchLibraryData()
             }
             onResult(result)
@@ -675,7 +756,7 @@ object PlaylistAlbumState {
                         unfilteredPlaylistData = pending.previousData
                         playlistData = unfilteredPlaylistData.withoutBlockedContent()
                     }
-                    if (pending.moves.size > 1) fetchPlaylistData(pending.playlistId, addToHistory = false)
+                    if (pending.moves.size > 1) fetchPlaylistData(pending.playlistId, addToHistory = false, forceRefresh = true)
                     playlistLoadError = result.exceptionOrNull() as? Exception
                 }
             } finally {
@@ -709,7 +790,7 @@ object PlaylistAlbumState {
                     Result.failure(e)
                 }
             if (result.isSuccess && selectedPlaylistId == playlistId) {
-                fetchPlaylistData(playlistId, pendingPlaylistThumbnail, addToHistory = false)
+                fetchPlaylistData(playlistId, pendingPlaylistThumbnail, addToHistory = false, forceRefresh = true)
             }
             onResult(result)
         }
@@ -737,6 +818,18 @@ object PlaylistAlbumState {
 
     private fun Map<String, List<YTItem>>.withoutBlockedContent(): Map<String, List<YTItem>> =
         mapValues { (title, items) -> if (title == "header") items else BlockedContent.filterItems(items) }
+
+    private fun Map<String, List<YTItem>>.withPlaylistSongs(songs: List<SongItem>): Map<String, List<YTItem>> {
+        if (containsKey("Tracks")) return this + ("Tracks" to songs) + ("Continuation" to emptyList())
+        if (containsKey("Continuation")) return this + ("Continuation" to songs)
+        return mapValues { (title, items) ->
+            if (title.equals("header", ignoreCase = true) || title.contains("suggest", ignoreCase = true)) {
+                items
+            } else {
+                items.filterNot { it is SongItem || it is EpisodeItem }
+            }
+        }.filterValues { it.isNotEmpty() } + ("songs" to songs)
+    }
 }
 
 internal fun canRestoreAlbum(

@@ -20,6 +20,7 @@ import com.metrolist.shared.db.entities.ArtistEntity
 import com.metrolist.shared.db.entities.EpisodeListeningProgress
 import com.metrolist.shared.db.entities.PlaylistSongMap
 import com.metrolist.shared.db.entities.PodcastEntity
+import com.metrolist.shared.db.entities.RelatedSongMap
 import com.metrolist.shared.db.entities.Song
 import com.metrolist.shared.db.entities.SongAlbumMap
 import com.metrolist.shared.db.entities.SongArtistMap
@@ -37,6 +38,16 @@ import kotlin.time.Clock
 data class SongCustomMetadata(
     val customTitle: String?,
     val customArtist: String?,
+)
+
+data class SongLibraryMembership(
+    val id: String,
+    val inLibrary: Boolean,
+)
+
+data class SongPlayTime(
+    val id: String,
+    val totalPlayTime: Long,
 )
 
 data class SongDuration(
@@ -161,7 +172,20 @@ interface SongDao {
 
     @Transaction
     @Query(
-        "SELECT song.* FROM song WHERE title LIKE '%' || :query || '%' OR customTitle LIKE '%' || :query || '%' OR albumName LIKE '%' || :query || '%' OR customArtist LIKE '%' || :query || '%' OR EXISTS (SELECT 1 FROM song_artist_map JOIN artist ON artist.id = song_artist_map.artistId WHERE song_artist_map.songId = song.id AND artist.name LIKE '%' || :query || '%') ORDER BY song.rowid",
+        """
+        SELECT song.* FROM song
+        WHERE instr(lower(song.title), lower(:query)) > 0
+           OR instr(lower(song.customTitle), lower(:query)) > 0
+           OR instr(lower(song.albumName), lower(:query)) > 0
+           OR instr(lower(song.customArtist), lower(:query)) > 0
+           OR EXISTS (
+               SELECT 1 FROM song_artist_map
+               JOIN artist ON artist.id = song_artist_map.artistId
+               WHERE song_artist_map.songId = song.id
+                 AND instr(lower(artist.name), lower(:query)) > 0
+           )
+        ORDER BY song.rowid
+        """,
     )
     fun storedSearchSongs(query: String): Flow<List<Song>>
 
@@ -440,6 +464,13 @@ interface SongDao {
     @Query(
         """
         SELECT album.*,
+               (SELECT MIN(song.inLibrary)
+                FROM song
+                WHERE song.id IN (
+                    SELECT direct.id FROM song AS direct WHERE direct.albumId = album.id
+                    UNION
+                    SELECT songId FROM song_album_map WHERE albumId = album.id
+                )) AS firstSongAddedAt,
                (SELECT SUM(song.totalPlayTime)
                 FROM song
                 WHERE song.albumId = album.id) AS timeListened
@@ -489,13 +520,13 @@ interface SongDao {
         SELECT song.* FROM song
         WHERE song.inLibrary IS NOT NULL
           AND (
-              song.title LIKE '%' || :query || '%'
-              OR song.customTitle LIKE '%' || :query || '%'
-              OR song.customArtist LIKE '%' || :query || '%'
-              OR song.albumName LIKE '%' || :query || '%'
+              song.title LIKE '%' || :escapedQuery || '%' ESCAPE '!'
+              OR song.customTitle LIKE '%' || :escapedQuery || '%' ESCAPE '!'
+              OR song.customArtist LIKE '%' || :escapedQuery || '%' ESCAPE '!'
+              OR song.albumName LIKE '%' || :escapedQuery || '%' ESCAPE '!'
               OR EXISTS (
                   SELECT 1 FROM song_artist_map sam JOIN artist a ON a.id = sam.artistId
-                  WHERE sam.songId = song.id AND a.name LIKE '%' || :query || '%'
+                  WHERE sam.songId = song.id AND a.name LIKE '%' || :escapedQuery || '%' ESCAPE '!'
               )
           )
         ORDER BY
@@ -506,7 +537,7 @@ interface SongDao {
         """,
     )
     suspend fun contentMatchedSongs(
-        query: String,
+        escapedQuery: String,
         limit: Int,
         offset: Int,
         descending: Boolean,
@@ -633,6 +664,12 @@ interface SongDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(song: SongEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(map: RelatedSongMap): Long
+
+    @Query("SELECT EXISTS(SELECT 1 FROM related_song_map WHERE songId = :songId)")
+    suspend fun hasRelatedSongs(songId: String): Boolean
+
     @Update
     suspend fun update(song: SongEntity)
 
@@ -657,6 +694,12 @@ interface SongDao {
 
     @Query("SELECT id, duration FROM song WHERE duration > 0")
     fun knownSongDurations(): Flow<List<SongDuration>>
+
+    @Query("SELECT id, inLibrary IS NOT NULL AS inLibrary FROM song")
+    fun songLibraryMemberships(): Flow<List<SongLibraryMembership>>
+
+    @Query("SELECT id, totalPlayTime FROM song WHERE totalPlayTime > 0")
+    fun songPlayTimes(): Flow<List<SongPlayTime>>
 
     @Transaction
     suspend fun upsert(song: SongEntity) {

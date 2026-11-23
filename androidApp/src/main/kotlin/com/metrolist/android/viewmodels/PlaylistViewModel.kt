@@ -23,7 +23,9 @@ import com.metrolist.shared.db.entities.KIND_DOWNLOAD
 import com.metrolist.shared.db.entities.Playlist
 import com.metrolist.shared.db.entities.PlaylistEntity
 import com.metrolist.shared.db.entities.PlaylistSongMap
+import com.metrolist.shared.db.entities.toPlaylistItem
 import com.metrolist.shared.db.entities.toSongItem
+import com.metrolist.shared.db.hasCompleteStoredSongs
 import com.metrolist.shared.db.refreshHistoryPlaylist
 import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.added_song
@@ -43,8 +45,10 @@ import com.metrolist.shared.model.PlaylistPresentation
 import com.metrolist.shared.model.PlaylistPresentationOptions
 import com.metrolist.shared.model.PlaylistSongSort
 import com.metrolist.shared.model.SongItem
+import com.metrolist.shared.model.isSyncablePlaylistId
 import com.metrolist.shared.model.moveSelection
 import com.metrolist.shared.model.preparePlaylistPresentation
+import com.metrolist.shared.model.preservePlaylistOccurrenceMappings
 import com.metrolist.shared.model.selectionReorderMoves
 import com.metrolist.shared.model.withNavigationThumbnail
 import com.metrolist.shared.playlist.PlaylistChanges
@@ -63,6 +67,7 @@ import com.metrolist.shared.state.GlobalYouTubeRepository
 import com.metrolist.shared.state.SongLikeState
 import com.metrolist.shared.state.SongMetadataState
 import com.metrolist.shared.utils.Logger
+import com.metrolist.shared.youtube.playback.PlaybackNetworkStateStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +108,8 @@ class PlaylistViewModel(
     val songs: State<List<SongItem>> = _songs
     private val _durationSongs = mutableStateOf<List<SongItem>>(emptyList())
     val durationSongs: State<List<SongItem>> = _durationSongs
+    private val _hasCompleteStoredSnapshot = mutableStateOf(false)
+    val hasCompleteStoredSnapshot: State<Boolean> = _hasCompleteStoredSnapshot
 
     private val _page = mutableStateOf<PlaylistPage?>(null)
     val page: State<PlaylistPage?> = _page
@@ -164,6 +171,7 @@ class PlaylistViewModel(
                 prepareLoadedPlaylist(BlockedContent.filterSongs(songs), BlockedContent.filterSongs(suggestions), options, hasMore)
             }
         Snapshot.withMutableSnapshot {
+            _hasCompleteStoredSnapshot.value = false
             metadata()
             pendingReorder = null
             reorderOriginalSongs = null
@@ -229,7 +237,10 @@ class PlaylistViewModel(
         loadDownloadedSongIds()
     }
 
-    fun loadPlaylist(playlistId: String? = _playlistId.value) {
+    fun loadPlaylist(
+        playlistId: String? = _playlistId.value,
+        forceRefresh: Boolean = false,
+    ) {
         if (_playlistId.value != playlistId) {
             thumbnailHint = null
             _playlistInfo.value = null
@@ -243,6 +254,7 @@ class PlaylistViewModel(
         cancelSearchLoad()
         pageLoadJob?.cancel()
         _page.value = null
+        _hasCompleteStoredSnapshot.value = false
         playlistLoadJob?.cancel()
         playlistLoadJob =
             viewModelScope.launch {
@@ -288,13 +300,28 @@ class PlaylistViewModel(
                         }
 
                         val hadCachedPlaylist = loadLocalPlaylist(id, preferBrowseId = true)
+                        val stored = database.dao().findPlaylistEntity(id)
+                        if (!forceRefresh && PlaybackNetworkStateStore.current.connected && hadCachedPlaylist &&
+                            stored?.hasCompleteStoredSongs(_durationSongs.value) == true
+                        ) {
+                            return@launch
+                        }
                         if (!hadCachedPlaylist || _songs.value.isEmpty()) {
                             _isLoading.value = true
                         }
 
                         val page =
                             withContext(Dispatchers.IO) {
-                                repositoryProvider().getPlaylistPageData(localEntity?.browseId ?: id, applyContentFilters = false)
+                                val repository = repositoryProvider()
+                                val first = repository.getPlaylistPageData(localEntity?.browseId ?: id, applyContentFilters = false)
+                                if (!first.isOffline && stored != null && stored.remoteHeader == null &&
+                                    stored.browseId?.isSyncablePlaylistId() == true &&
+                                    stored.remoteSongCount?.let { _durationSongs.value.size >= it } == true
+                                ) {
+                                    repository.completePlaylistPage(first, applyContentFilters = false)
+                                } else {
+                                    first
+                                }
                             }
                         val data = page.sections
                         if (data.isEmpty()) {
@@ -309,7 +336,7 @@ class PlaylistViewModel(
                                 ?.firstOrNull()
                                 ?.withNavigationThumbnail(thumbnailHint)
                                 ?.copy(customThumbnail = customCover)
-                        val songs = data.playlistSongs()
+                        val songs = data.playlistSongs().preservePlaylistOccurrenceMappings(_songs.value)
                         if (!page.hasMore && !page.isOffline) cachePlaylist(id, playlistInfo, songs)
                         publishLoadedSongs(songs, data.playlistSuggestions(), page.hasMore) {
                             _playlistInfo.value = playlistInfo
@@ -375,11 +402,12 @@ class PlaylistViewModel(
                                 repositoryProvider().continuePlaylistPage(page, applyContentFilters = false)
                             }
                         if (_page.value !== page) return@withLock
-                        publishLoadedSongs(next.songs, next.sections.playlistSuggestions(), next.hasMore) {
+                        val songs = next.songs.preservePlaylistOccurrenceMappings(_songs.value)
+                        publishLoadedSongs(songs, next.sections.playlistSuggestions(), next.hasMore) {
                             _page.value = next
                             _playlistTrackCount.intValue = next.songs.size
                         }
-                        if (!next.hasMore) cachePlaylist(_playlistId.value ?: return@withLock, _playlistInfo.value, next.songs)
+                        if (!next.hasMore) cachePlaylist(_playlistId.value ?: return@withLock, _playlistInfo.value, songs)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -398,8 +426,9 @@ class PlaylistViewModel(
             withContext(Dispatchers.IO) {
                 repositoryProvider().completePlaylistPage(initial, applyContentFilters = false)
             }
-        cachePlaylist(_playlistId.value ?: return _songs.value, _playlistInfo.value, page.songs)
-        publishLoadedSongs(page.songs, page.sections.playlistSuggestions()) {
+        val songs = page.songs.preservePlaylistOccurrenceMappings(_songs.value)
+        cachePlaylist(_playlistId.value ?: return _songs.value, _playlistInfo.value, songs)
+        publishLoadedSongs(songs, page.sections.playlistSuggestions()) {
             _page.value = page
             _playlistTrackCount.intValue = page.songs.size
         }
@@ -455,22 +484,22 @@ class PlaylistViewModel(
             }
         localSongMapIds.clear()
         songs.forEachIndexed { index, song -> localSongMapIds[song] = playlistSongs[index].map.id }
-        val author = getString(Res.string.you)
+        val author =
+            getString(Res.string.you).takeIf {
+                playlist.playlist.isLocal || playlist.playlist.isEditable ||
+                    playlist.playlist.browseId == null
+            }
         publishLoadedSongs(songs) {
+            _hasCompleteStoredSnapshot.value =
+                PlaybackNetworkStateStore.current.connected && playlist.playlist.hasCompleteStoredSongs(songs)
             _playlistTrackCount.intValue = playlistSongs.size
             _isFavorite.value = playlist.playlist.bookmarkedAt != null
             _playlistInfo.value =
-                PlaylistItem(
-                    id = playlist.playlist.browseId ?: playlist.id,
-                    title = playlist.title,
-                    thumbnail = playlist.thumbnailUrl,
-                    author = author,
-                    songCount = playlist.songCount.toString(),
-                    isEditable = playlist.playlist.isEditable,
-                    description = playlist.playlist.description,
-                    isLocal = playlist.playlist.isLocal || playlist.playlist.browseId == null,
-                    customThumbnail = playlist.playlist.customThumbnailUrl,
-                ).withNavigationThumbnail(thumbnailHint)
+                playlist.playlist
+                    .toPlaylistItem(playlist.songCount)
+                    .let {
+                        it.copy(thumbnail = playlist.thumbnailUrl, author = it.author ?: author)
+                    }.withNavigationThumbnail(thumbnailHint)
         }
         return true
     }
@@ -617,7 +646,7 @@ class PlaylistViewModel(
                         } else if (remoteId != null) {
                             repositoryProvider().addToPlaylist(remoteId, song.id, allowDuplicate = allowDuplicate).getOrThrow()
                         }
-                        if (remoteId != null && _playlistId.value == playlistId) loadPlaylist(remoteId)
+                        if (remoteId != null && _playlistId.value == playlistId) loadPlaylist(remoteId, forceRefresh = true)
                     }
                     _operationState.value =
                         PlaylistOperationState(
@@ -665,7 +694,7 @@ class PlaylistViewModel(
                 if (_playlistId.value != id) return@launch
                 if (result.isSuccess) {
                     _isFavorite.value = bookmarked
-                    if (bookmarked && Settings.shared.autoDownloadOnLike) {
+                    if (bookmarked && Settings.shared.autoDownloadSavedCollections) {
                         try {
                             val songs =
                                 mutationMutex.withLock {
@@ -746,7 +775,7 @@ class PlaylistViewModel(
                             publishLoadedSongs(originalSongs, _suggestions.value) { }
                         }
                         _operationState.value = PlaylistOperationState(message = getString(Res.string.error_unknown))
-                        loadPlaylist()
+                        loadPlaylist(forceRefresh = true)
                     }
                 }
             }
@@ -791,7 +820,7 @@ class PlaylistViewModel(
                 moveRemoteSong(remoteId, localMovingSetVideoId, successor).getOrThrow()
             }
             if (playlist != null && moving != null && target != null) {
-                database.dao().move(playlist.id, moving.position, target.position)
+                database.dao().moveMapping(playlist.id, moving.id, target.id)
             }
         }
     }

@@ -62,6 +62,7 @@ import com.metrolist.shared.generated.resources.play
 import com.metrolist.shared.generated.resources.playlist
 import com.metrolist.shared.generated.resources.playlist_direction_ascending
 import com.metrolist.shared.generated.resources.playlist_direction_descending
+import com.metrolist.shared.generated.resources.playlist_lock
 import com.metrolist.shared.generated.resources.playlist_order_original
 import com.metrolist.shared.generated.resources.playlist_reorder
 import com.metrolist.shared.generated.resources.playlists
@@ -166,6 +167,7 @@ fun libraryContentText() =
             ),
         sortLabels =
             mapOf(
+                LibrarySortType.DOWNLOADED to stringResource(Res.string.filter_downloaded),
                 LibrarySortType.RECENTLY_ADDED to stringResource(Res.string.sort_by_create_date),
                 LibrarySortType.NAME to stringResource(Res.string.sort_by_name),
                 LibrarySortType.LAST_UPDATED to stringResource(Res.string.library_sort_updated),
@@ -248,21 +250,28 @@ fun libraryAutoPlaylists(hasNewUploads: Boolean = false): List<LibraryAutoPlayli
 }
 
 @Composable
-fun collectionFilterBarText(includeClear: Boolean = false) =
-    CollectionFilterBarText(
-        searchLabel = stringResource(Res.string.stored_search_songs),
-        sortLabels =
-            mapOf(
-                CollectionSort.NEWEST to stringResource(Res.string.sort_by_create_date),
-                CollectionSort.TITLE to stringResource(Res.string.title),
-                CollectionSort.ARTIST to stringResource(Res.string.artist),
-                CollectionSort.SIZE to stringResource(Res.string.file_size),
-                CollectionSort.LAST_USED to stringResource(Res.string.stored_sort_last_used),
-                CollectionSort.MOST_PLAYED to stringResource(Res.string.collection_sort_most_played),
-            ),
-        sortOptions = stringResource(Res.string.sort_options),
-        clear = stringResource(Res.string.clear).takeIf { includeClear },
-    )
+fun collectionFilterBarText(
+    includeClear: Boolean = false,
+    includeManual: Boolean = false,
+) = CollectionFilterBarText(
+    searchLabel = stringResource(Res.string.stored_search_songs),
+    sortLabels =
+        buildMap {
+            put(CollectionSort.NEWEST, stringResource(Res.string.sort_by_create_date))
+            put(CollectionSort.TITLE, stringResource(Res.string.title))
+            put(CollectionSort.ARTIST, stringResource(Res.string.artist))
+            put(CollectionSort.SIZE, stringResource(Res.string.file_size))
+            put(CollectionSort.LAST_USED, stringResource(Res.string.stored_sort_last_used))
+            put(CollectionSort.MOST_PLAYED, stringResource(Res.string.collection_sort_most_played))
+            if (includeManual) {
+                put(CollectionSort.MANUAL, stringResource(Res.string.manual))
+            }
+        },
+    sortOptions = stringResource(Res.string.sort_options),
+    clear = stringResource(Res.string.clear).takeIf { includeClear },
+    reorder = if (includeManual) stringResource(Res.string.playlist_reorder) else "",
+    lock = if (includeManual) stringResource(Res.string.playlist_lock) else "",
+)
 
 @Composable
 fun playlistContentText(useTrackCount: Boolean = false) =
@@ -287,11 +296,13 @@ fun playlistOrderControlsText() =
                 PlaylistSongSort.ALBUM to stringResource(Res.string.album),
                 PlaylistSongSort.DURATION to stringResource(Res.string.duration),
                 PlaylistSongSort.YEAR to stringResource(Res.string.sort_by_year),
+                PlaylistSongSort.LISTENING_TIME to stringResource(Res.string.history_sort_listening_time),
             ),
         sortOptions = stringResource(Res.string.sort_options),
         ascending = stringResource(Res.string.playlist_direction_ascending),
         descending = stringResource(Res.string.playlist_direction_descending),
         reorder = stringResource(Res.string.playlist_reorder),
+        lock = stringResource(Res.string.playlist_lock),
     )
 
 @Composable

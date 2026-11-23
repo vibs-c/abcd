@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlin.random.Random
 
 data class MusicQueueEntry(
     val key: Long,
@@ -62,10 +63,26 @@ class MusicQueue {
     fun snapshot(): MusicQueueSnapshot = _snapshots.value.also { it.undoIdentity = queueIdentity }
 
     fun restore(snapshot: MusicQueueSnapshot) {
-        queueIdentity = snapshot.undoIdentity ?: Any()
+        val hasOccurrenceKeys = snapshot.displayedEntryKeys?.size == snapshot.displayedItems.size
+        queueIdentity = snapshot.undoIdentity.takeIf { hasOccurrenceKeys } ?: Any()
         val normalized = snapshot.forRestore(true)
         recommendationsSongsOnly = normalized.recommendationsSongsOnly
-        val original = normalized.originalItems.map { Entry(nextEntryKey++, it) }
+        val originalKeys =
+            normalized.displayedEntryKeys
+                ?.takeIf { queueIdentity === normalized.undoIdentity && it.size == normalized.displayedItems.size }
+                ?.let { keys ->
+                    LongArray(normalized.originalItems.size) { -1L }.also { byOriginalIndex ->
+                        normalized.originalIndices.forEachIndexed { displayedIndex, originalIndex ->
+                            byOriginalIndex[originalIndex] = keys[displayedIndex]
+                        }
+                    }
+                }
+        val original =
+            normalized.originalItems.mapIndexed { index, song ->
+                val key = originalKeys?.get(index)?.takeIf { it >= 0L } ?: nextEntryKey++
+                nextEntryKey = maxOf(nextEntryKey, key + 1L)
+                Entry(key, song)
+            }
         val displayed = normalized.originalIndices.map(original::get)
         originalEntries = original.filterNot { it.song.isUnavailable }
         displayedEntries = displayed.filterNot { it.song.isUnavailable }
@@ -168,7 +185,16 @@ class MusicQueue {
         if (songs.isEmpty()) return
         val entries = songs.filterNot { it.isUnavailable }.map { Entry(nextEntryKey++, it) }
         originalEntries = originalEntries + entries
-        displayedEntries = displayedEntries + if (isShuffled) entries.shuffled() else entries
+        displayedEntries =
+            if (isShuffled) {
+                // Inserting each song at a random upcoming position keeps later pages mixed with the loaded ones.
+                displayedEntries.toMutableList().apply {
+                    val firstUpcoming = (_currentIndex.value + 1).coerceIn(0, size)
+                    entries.forEach { add(Random.nextInt(firstUpcoming, size + 1), it) }
+                }
+            } else {
+                displayedEntries + entries
+            }
         publishItems()
     }
 
@@ -260,12 +286,17 @@ class MusicQueue {
         publishItems()
     }
 
-    fun removeAt(indices: Set<Int>): QueueRemoval? {
+    fun removeAt(
+        indices: Set<Int>,
+        advanceCurrentToSuccessor: Boolean = false,
+        successorIndex: Int? = null,
+    ): QueueRemoval? {
         val validIndices = indices.filter { it in displayedEntries.indices }.sorted()
         if (validIndices.isEmpty()) return null
         val previousCurrentIndex = _currentIndex.value
         val originalIndices = originalEntries.withIndex().associate { it.value to it.index }
         val removedEntries = validIndices.map(displayedEntries::get).toSet()
+        val successorEntry = successorIndex?.takeIf { it in displayedEntries.indices && it !in validIndices }?.let(displayedEntries::get)
         val removed = validIndices.map { IndexedQueueItem(it, displayedEntries[it].song) }
         val removedOriginal =
             validIndices.map { index ->
@@ -274,9 +305,17 @@ class MusicQueue {
             }
         displayedEntries = displayedEntries.filterNot { it in removedEntries }
         originalEntries = originalEntries.filterNot { it in removedEntries }
-        publishItems((previousCurrentIndex - validIndices.count { it < previousCurrentIndex }).coerceIn(-1, displayedEntries.lastIndex))
+        val removedIndexSet = validIndices.toHashSet()
+        val currentIndex =
+            if (advanceCurrentToSuccessor && previousCurrentIndex in removedIndexSet) {
+                successorEntry?.let(displayedEntries::indexOf) ?: -1
+            } else {
+                (previousCurrentIndex - validIndices.count { it < previousCurrentIndex }).coerceIn(-1, displayedEntries.lastIndex)
+            }
+        publishItems(currentIndex)
         return QueueRemoval(removed, removedOriginal, previousCurrentIndex, _currentIndex.value, isShuffled).also {
             it.undoIdentity = queueIdentity
+            it.autoAdvancedEntryKey = successorEntry?.key
         }
     }
 
@@ -312,7 +351,12 @@ class MusicQueue {
         val shiftedCurrentIndex = restored.indexOf(current)
         displayedEntries = restored
         val currentIndex =
-            if (isShuffled == removal.wasShuffled && currentIndexBeforeRestore == removal.currentIndexAfterRemoval) {
+            if (isShuffled == removal.wasShuffled &&
+                (
+                    removal.autoAdvancedEntryKey?.let { current?.key == it }
+                        ?: (currentIndexBeforeRestore == removal.currentIndexAfterRemoval)
+                )
+            ) {
                 removal.previousCurrentIndex
             } else {
                 shiftedCurrentIndex
@@ -377,9 +421,7 @@ class MusicQueue {
         isShuffled = !isShuffled
         displayedEntries =
             prefix +
-            if (isShuffled && legacyShuffle) {
-                upcoming.shuffled()
-            } else if (isShuffled) {
+            if (isShuffled) {
                 val (recommendations, explicit) = upcoming.partition { it.song.queueSourceTitle.isRecommendationGeneratedQueueSource() }
                 explicit.shuffled() + recommendations
             } else {
@@ -403,12 +445,18 @@ class MusicQueue {
                 currentIndex = index,
                 isShuffled = isShuffled,
                 recommendationsSongsOnly = recommendationsSongsOnly,
-            ).also { it.undoIdentity = queueIdentity }
+            ).also {
+                it.undoIdentity = queueIdentity
+                it.displayedEntryKeys = displayedEntries.map { entry -> entry.key }
+            }
     }
 
     private fun publishSnapshot() {
         _snapshots.value =
-            _snapshots.value.copy(currentIndex = _currentIndex.value, isShuffled = isShuffled).also { it.undoIdentity = queueIdentity }
+            _snapshots.value.copy(currentIndex = _currentIndex.value, isShuffled = isShuffled).also {
+                it.undoIdentity = queueIdentity
+                it.displayedEntryKeys = displayedEntries.map { entry -> entry.key }
+            }
     }
 }
 
@@ -427,6 +475,9 @@ data class MusicQueueSnapshot(
     @Transient
     internal var undoIdentity: Any? = null
 
+    @Transient
+    internal var displayedEntryKeys: List<Long>? = null
+
     fun forRestore(rememberShuffle: Boolean): MusicQueueSnapshot {
         val canonical = originalItems.takeIf { it.hasSameOccurrencesAs(displayedItems) } ?: displayedItems
         val indices =
@@ -442,14 +493,18 @@ data class MusicQueueSnapshot(
         if (!rememberShuffle && isShuffled && displayedItems.isNotEmpty()) {
             val prefix = indices.take(index + 1)
             val retained = prefix.toSet()
-            val ordered = (prefix + canonical.indices.filterNot { it in retained }).map(canonical::get)
+            val orderedIndices = prefix + canonical.indices.filterNot { it in retained }
+            val ordered = orderedIndices.map(canonical::get)
             return copy(
                 displayedItems = ordered,
                 originalItems = ordered,
                 originalIndices = canonical.indices.toList(),
                 currentIndex = index,
                 isShuffled = false,
-            ).also { it.undoIdentity = undoIdentity }
+            ).also {
+                it.undoIdentity = undoIdentity
+                it.displayedEntryKeys = keysForOriginalIndices(orderedIndices)
+            }
         }
         return copy(
             originalItems = canonical,
@@ -457,7 +512,16 @@ data class MusicQueueSnapshot(
             currentIndex = index,
             isShuffled =
                 isShuffled && displayedItems.isNotEmpty(),
-        ).also { it.undoIdentity = undoIdentity }
+        ).also {
+            it.undoIdentity = undoIdentity
+            it.displayedEntryKeys = keysForOriginalIndices(indices)
+        }
+    }
+
+    private fun keysForOriginalIndices(indices: List<Int>): List<Long>? {
+        val keys = displayedEntryKeys?.takeIf { it.size == displayedItems.size } ?: return null
+        val keyByOriginalIndex = indices.withIndex().associate { (displayedIndex, originalIndex) -> originalIndex to keys[displayedIndex] }
+        return indices.mapNotNull(keyByOriginalIndex::get)
     }
 }
 
@@ -474,4 +538,5 @@ data class QueueRemoval(
     val wasShuffled: Boolean,
 ) {
     internal var undoIdentity: Any? = null
+    internal var autoAdvancedEntryKey: Long? = null
 }

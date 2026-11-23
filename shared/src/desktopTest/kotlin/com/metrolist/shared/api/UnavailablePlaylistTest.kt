@@ -48,7 +48,7 @@ class UnavailablePlaylistTest {
     }
 
     @Test
-    fun capturedGreyedRowsRemainPlayableAndKeepOccurrenceIds() {
+    fun capturedGreyedPlaylistRowsWithoutUpsellRemainPlayableAndKeepOccurrenceIds() {
         for (fixture in listOf("unavailable-playlist.json", "unavailable-playlist-continuation.json")) {
             val rows = fixtureRows(fixture)
             val songs = rows.map { assertNotNull(YouTubeItemParser.parseItem(it) as? SongItem) }

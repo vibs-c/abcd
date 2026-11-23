@@ -49,6 +49,7 @@ import platform.Foundation.closeFile
 import platform.Foundation.create
 import platform.Foundation.fileHandleForUpdatingAtPath
 import platform.Foundation.seekToFileOffset
+import platform.Foundation.writeToFile
 import platform.UniformTypeIdentifiers.UTType
 import platform.darwin.NSObject
 import platform.darwin.dispatch_get_main_queue
@@ -57,6 +58,7 @@ internal class IosPlaybackCache(
     private val client: HttpClient,
     private val scope: CoroutineScope,
     private val onFilesChanged: () -> Unit = {},
+    private val directoryName: String = "playback",
     private val availableSpace: (String) -> Long = { path ->
         (NSFileManager.defaultManager.attributesOfFileSystemForPath(path, null)?.get(NSFileSystemFreeSize) as? NSNumber)
             ?.longLongValue ?: 0L
@@ -66,7 +68,7 @@ internal class IosPlaybackCache(
     private val files = NSFileManager.defaultManager
     val directory: String by lazy {
         val caches = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, true).first() as String
-        "$caches/metrolist/playback"
+        "$caches/metrolist/$directoryName"
     }
     private val initializedDirectory: String by lazy {
         directory.also { path ->
@@ -82,7 +84,7 @@ internal class IosPlaybackCache(
     fun acquire(resource: PlaybackResource): IosPlaybackCapture? {
         val remuxOpus = resource.isWebmOpus()
         val required = resource.requiresIosAudioCapture
-        val publish = Settings.shared.songCacheEnabled && Settings.shared.maxSongCacheSize != 0 && !remuxOpus && !resource.isSabr
+        val publish = Settings.shared.songCacheEnabled && Settings.shared.maxSongCacheSize != 0 && !resource.isSabr
         if ((!publish && !required) ||
             (!resource.isSabr && (!resource.isDirectFile || !isTrustedAudioDownloadUrl(resource.url))) ||
             (!remuxOpus && !isIosPlayableAudioMimeType(resource.mimeType))
@@ -379,7 +381,16 @@ internal class IosPlaybackCapture(
 
     fun resumeRequests() = source.resumeRequests()
 
+    val isRemuxed: Boolean get() = remuxed != null
+
     suspend fun copyCompleted(destination: String): Pair<String?, Long> {
+        // Opus captures publish the MP4 that AVPlayer played, since iOS cannot play the WebM source.
+        remuxed?.let { pending ->
+            val bytes = pending.await().getOrThrow()
+            val data = bytes.usePinned { NSData.create(it.addressOf(0), bytes.size.toULong()) }
+            check(data.writeToFile(destination, atomically = false)) { "Could not copy remuxed audio" }
+            return "audio/mp4" to bytes.size.toLong()
+        }
         var result: Pair<String?, Long>? = null
         source.copyComplete(mayContinue = { mayPublish }) { mimeType, size ->
             val actual = (files.attributesOfItemAtPath(path, null)?.get(NSFileSize) as? NSNumber)?.longLongValue

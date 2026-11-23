@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -45,7 +46,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -83,6 +84,8 @@ import com.metrolist.shared.ui.components.LiquidBackground
 import com.metrolist.shared.ui.components.LocalVisualWorkActive
 import com.metrolist.shared.ui.components.PrefetchPlayerArtwork
 import com.metrolist.shared.ui.components.images.AsyncImage
+import com.metrolist.shared.ui.components.playbackAnimationDelayMillis
+import com.metrolist.shared.ui.components.playbackAnimationOrigin
 import com.metrolist.shared.ui.theme.uiEnhanced
 import com.metrolist.shared.ui.utils.artworkHorizontalProgressiveBlur
 import com.metrolist.shared.ui.utils.supportsNativeBlur
@@ -96,7 +99,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 internal fun lerp(
     start: Float,
@@ -567,6 +569,8 @@ private fun LandscapeFullscreenThumbnailBackground(
             )
         }
 
+        val foregroundIsDark = playerBackground == PlayerBackgroundStyle.LIQUID && MaterialTheme.colorScheme.surface.luminance() >= 0.5f
+        val backdropScrim = if (foregroundIsDark) Color.White else Color.Black
         val layoutDirection = LocalLayoutDirection.current
         val cutoutStart = WindowInsets.displayCutout.asPaddingValues().calculateStartPadding(layoutDirection)
 
@@ -612,8 +616,8 @@ private fun LandscapeFullscreenThumbnailBackground(
                                 arrayOf(
                                     0.0f to Color.Transparent,
                                     0.50f to Color.Transparent,
-                                    0.78f to Color.Black.copy(alpha = 0.12f),
-                                    1.0f to Color.Black.copy(alpha = 0.22f),
+                                    0.78f to backdropScrim.copy(alpha = 0.12f),
+                                    1.0f to backdropScrim.copy(alpha = 0.22f),
                                 ),
                         ),
                     ),
@@ -762,6 +766,7 @@ private fun LandscapeFullscreenThumbnailBackground(
                 }
             }
         }
+        Box(Modifier.fillMaxSize().background(backdropScrim.copy(alpha = 0.6f)))
     }
 }
 
@@ -1021,10 +1026,11 @@ internal fun rememberAnimatedGradientStops(
         if (!motionEnabled) return@LaunchedEffect
         visibility.collectLatest { shown ->
             if (!shown) return@collectLatest
-            var lastUpdateTime = withFrameMillis { it }
+            var lastUpdateTime = playbackAnimationOrigin.elapsedNow().inWholeMilliseconds
             while (true) {
-                delay(50.milliseconds)
-                val updateTime = withFrameMillis { it }
+                // Step on the playback clock's grid, like Liquid, so these repaints can share frames with other ticks.
+                delay(playbackAnimationDelayMillis(playbackAnimationOrigin.elapsedNow().inWholeMilliseconds, 50L))
+                val updateTime = playbackAnimationOrigin.elapsedNow().inWholeMilliseconds
                 val elapsedMillis = (updateTime - lastUpdateTime).coerceIn(0L, 100L)
                 gradientPhase = (gradientPhase + elapsedMillis * 0.00025f) % colors.size
                 lastUpdateTime = updateTime

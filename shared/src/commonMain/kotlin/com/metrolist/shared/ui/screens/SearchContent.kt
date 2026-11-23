@@ -68,7 +68,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
@@ -95,6 +94,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.metrolist.shared.generated.resources.Res
+import com.metrolist.shared.generated.resources.clearing_search_history
 import com.metrolist.shared.generated.resources.explicit
 import com.metrolist.shared.generated.resources.loading
 import com.metrolist.shared.generated.resources.more_options
@@ -154,6 +154,7 @@ import com.metrolist.shared.ui.tv.RequestTvFocus
 import com.metrolist.shared.ui.tv.tvFocusHighlight
 import com.metrolist.shared.ui.utils.DragScrollableColumn
 import com.metrolist.shared.ui.utils.artistArtworkShape
+import com.metrolist.shared.ui.utils.artworkBlur
 import com.metrolist.shared.ui.utils.carouselScroll
 import com.metrolist.shared.ui.utils.desktopArrowScroll
 import com.metrolist.shared.ui.utils.supportsNativeBlur
@@ -285,6 +286,7 @@ fun SearchContent(
                         SearchEmptyState(
                             recentSearchItems = if (Settings.shared.hideRecentSearches) emptyList() else uiState.recentSearchItems,
                             searchHistory = uiState.searchHistory,
+                            isClearingSearchHistory = uiState.isClearingSearchHistory,
                             onRecentItemClick = onItemClick,
                             onVideoItemClick = onVideoItemClick,
                             onHistoryItemClick = onHistoryItemClick,
@@ -351,6 +353,7 @@ private fun SearchEnterMotion(
 private fun SearchEmptyState(
     recentSearchItems: List<YTItem>,
     searchHistory: List<String>,
+    isClearingSearchHistory: Boolean,
     onRecentItemClick: (YTItem) -> Unit,
     onVideoItemClick: (YTItem) -> Unit,
     onHistoryItemClick: (String) -> Unit,
@@ -473,7 +476,7 @@ private fun SearchEmptyState(
             }
         }
 
-        if (searchHistory.isNotEmpty()) {
+        if (searchHistory.isNotEmpty() || isClearingSearchHistory) {
             item {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                     Column(Modifier.widthIn(max = 1400.dp).fillMaxWidth()) {
@@ -481,6 +484,7 @@ private fun SearchEmptyState(
                             title = text.recentSearches,
                             onClearClick = { confirmClearHistory = true },
                             text = text,
+                            clearing = isClearingSearchHistory,
                         )
                         Spacer(Modifier.height(12.dp))
                         Column(
@@ -555,6 +559,7 @@ private fun RecentSectionTitle(
     title: String,
     onClearClick: () -> Unit,
     text: SearchContentText,
+    clearing: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
@@ -567,12 +572,19 @@ private fun RecentSectionTitle(
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onClearClick, shapes = IconButtonDefaults.shapes()) {
-            Icon(
-                imageVector = MetrolistIcons.Default.Close,
-                contentDescription = text.clearSection(title),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (clearing) {
+            ContainedLoadingIndicator(
+                modifier = Modifier.size(48.dp),
+                label = stringResource(Res.string.clearing_search_history),
             )
+        } else {
+            IconButton(onClick = onClearClick, shapes = IconButtonDefaults.shapes()) {
+                Icon(
+                    imageVector = MetrolistIcons.Default.Close,
+                    contentDescription = text.clearSection(title),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -1227,7 +1239,7 @@ private fun TopResultCard(
                         modifier =
                             Modifier
                                 .matchParentSize()
-                                .blur(56.dp)
+                                .artworkBlur(56.dp, MaterialTheme.colorScheme.surfaceBright)
                                 .graphicsLayer(alpha = 0.38f),
                         contentScale = ContentScale.Crop,
                     )

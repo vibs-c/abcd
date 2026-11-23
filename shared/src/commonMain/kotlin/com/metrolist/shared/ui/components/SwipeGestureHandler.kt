@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -39,6 +40,7 @@ fun SwipeGestureHandler(
     enabled: Boolean = true,
     removeOnSwipeLeft: Boolean = false,
     enableSwipeRight: Boolean = true,
+    shape: Shape = ComponentShapes.CardShape,
     content: @Composable () -> Unit,
 ) {
     if (!enabled) {
@@ -107,7 +109,7 @@ fun SwipeGestureHandler(
 
     CompositionLocalProvider(LocalHapticFeedback provides thresholdHaptics) {
         SwipeableActionsBox(
-            modifier = modifier.clip(ComponentShapes.CardShape),
+            modifier = modifier.clip(shape),
             swipeThreshold = 64.dp,
             backgroundUntilSwipeThreshold = MaterialTheme.colorScheme.surfaceContainerHigh,
             startActions = if (enableSwipeRight) listOf(startAction) else emptyList(),
@@ -123,6 +125,7 @@ fun SongSwipeActions(
     song: SongItem,
     onFeedback: (String) -> Unit,
     enabled: Boolean = true,
+    shape: Shape = ComponentShapes.CardShape,
     content: @Composable () -> Unit,
 ) {
     val playback = LocalPlaybackController.current
@@ -131,6 +134,7 @@ fun SongSwipeActions(
         onSwipeRight = { playback.playNext(listOf(song)) },
         onFeedback = onFeedback,
         enabled = enabled && Settings.shared.swipeToSong,
+        shape = shape,
         content = content,
     )
 }

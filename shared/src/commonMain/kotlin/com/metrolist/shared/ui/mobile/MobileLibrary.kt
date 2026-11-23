@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -53,6 +54,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.metrolist.shared.constants.ThumbnailCornerRadius
 import com.metrolist.shared.db.MusicDatabase
 import com.metrolist.shared.db.collectionPlayCounts
 import com.metrolist.shared.db.entities.CachedAudioEntity
@@ -78,7 +80,6 @@ import com.metrolist.shared.generated.resources.retry
 import com.metrolist.shared.generated.resources.stored_remove_selected_message
 import com.metrolist.shared.generated.resources.stored_remove_selected_title
 import com.metrolist.shared.model.AlbumItem
-import com.metrolist.shared.model.ArtistTiny
 import com.metrolist.shared.model.BuiltinPlaylist
 import com.metrolist.shared.model.CollectionMeta
 import com.metrolist.shared.model.CollectionSort
@@ -91,6 +92,7 @@ import com.metrolist.shared.model.YTItem
 import com.metrolist.shared.model.defaultDirection
 import com.metrolist.shared.model.filterForPlaylistSearch
 import com.metrolist.shared.model.indexOfPlaylistOccurrence
+import com.metrolist.shared.model.isReordering
 import com.metrolist.shared.model.playlistOccurrenceKey
 import com.metrolist.shared.model.presentCollection
 import com.metrolist.shared.model.sortedForLikedPlaylist
@@ -99,6 +101,7 @@ import com.metrolist.shared.model.sortedForTopPlaylist
 import com.metrolist.shared.playlist.addSongToStoredPlaylist
 import com.metrolist.shared.playlist.moveSongInLocalPlaylist
 import com.metrolist.shared.playlist.removeSongFromLocalPlaylist
+import com.metrolist.shared.settings.ArtistNameAliases
 import com.metrolist.shared.settings.BlockedContent
 import com.metrolist.shared.settings.HiddenLibraryItems
 import com.metrolist.shared.settings.LibraryFilterType
@@ -131,6 +134,7 @@ import com.metrolist.shared.ui.components.rememberScrollingFabState
 import com.metrolist.shared.ui.components.topPlaylistOrderControlsText
 import com.metrolist.shared.ui.icons.MetrolistIcons
 import com.metrolist.shared.ui.menu.SpeedDialPinMenuItem
+import com.metrolist.shared.ui.menu.groupedMenuItemShapes
 import com.metrolist.shared.ui.navigation.NavigationBackHandler
 import com.metrolist.shared.ui.navigation.navigationPopupSource
 import com.metrolist.shared.ui.playback.PlaybackController
@@ -173,8 +177,10 @@ internal fun MobileLibrary(
     viewModel: LibraryViewModel,
     database: MusicDatabase,
     playbackController: PlaybackController,
+    guestPlaybackLocked: Boolean,
     onItemClick: (YTItem) -> Unit,
     onAutoPlaylistClick: (String, String) -> Unit,
+    onSwipeFeedback: (String) -> Unit,
     modifier: Modifier = Modifier,
     onItemLongClick: ((YTItem) -> Unit)? = null,
     onCreatePlaylist: (() -> Unit)? = null,
@@ -239,7 +245,8 @@ internal fun MobileLibrary(
         Settings.shared.libraryFilter = LibraryFilterType.ALL
     }
 
-    var isGridView by remember { mutableStateOf(Settings.shared.libraryGridView) }
+    val gridFilter = selectedFilter?.let { LibraryFilterType.valueOf(it.name) } ?: LibraryFilterType.ALL
+    val isGridView = Settings.shared.libraryGridView(gridFilter)
     var manualOrder by remember { mutableStateOf(Settings.shared.libraryManualOrder) }
     val autoPlaylists = libraryAutoPlaylists()
 
@@ -308,8 +315,7 @@ internal fun MobileLibrary(
                         }
                 },
                 onGridViewChange = {
-                    isGridView = it
-                    Settings.shared.libraryGridView = it
+                    Settings.shared.setLibraryGridView(gridFilter, it)
                 },
                 onManualOrderChange = {
                     manualOrder = it
@@ -330,28 +336,44 @@ internal fun MobileLibrary(
                         } else {
                             onItemLongClick?.let { callback -> { callback(ytItem) } }
                         }
-                    Box {
-                        LibraryItemContainer(
-                            isGridView = isGridView,
-                            onMenuClick = onMenuClick,
-                            modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onMenuClick),
-                            content = content,
-                        )
-                        DropdownMenuPopup(expanded = autoMenuExpanded, onDismissRequest = { autoMenuExpanded = false }) {
-                            DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 1)) {
-                                BuiltinPlaylist.fromId("auto:${hiddenItem.id}")?.let { builtin ->
-                                    val playlist = builtin.playlist(stringResource(builtin.title))
-                                    SpeedDialPinMenuItem(playlist, database) { autoMenuExpanded = false }
+                    val libraryItemContent: @Composable () -> Unit = {
+                        Box {
+                            LibraryItemContainer(
+                                isGridView = isGridView,
+                                onMenuClick = onMenuClick,
+                                modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onMenuClick),
+                                content = content,
+                            )
+                            DropdownMenuPopup(expanded = autoMenuExpanded, onDismissRequest = { autoMenuExpanded = false }) {
+                                val builtin = BuiltinPlaylist.fromId("auto:${hiddenItem.id}")
+                                val menuItemCount = if (builtin == null) 1 else 2
+                                DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 1)) {
+                                    builtin?.let { builtin ->
+                                        val playlist = builtin.playlist(stringResource(builtin.title))
+                                        SpeedDialPinMenuItem(playlist, database, count = menuItemCount) { autoMenuExpanded = false }
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(Res.string.hide_from_library_local)) },
+                                        shape = groupedMenuItemShapes(menuItemCount - 1, menuItemCount).shape,
+                                        onClick = {
+                                            HiddenLibraryItems.hide(hiddenItem)
+                                            autoMenuExpanded = false
+                                        },
+                                    )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(Res.string.hide_from_library_local)) },
-                                    onClick = {
-                                        HiddenLibraryItems.hide(hiddenItem)
-                                        autoMenuExpanded = false
-                                    },
-                                )
                             }
                         }
+                    }
+                    if (ytItem is SongItem && !isGridView) {
+                        SongSwipeActions(
+                            ytItem,
+                            onSwipeFeedback,
+                            enabled = !guestPlaybackLocked && !ytItem.isUnavailable,
+                            shape = RoundedCornerShape(ThumbnailCornerRadius),
+                            content = libraryItemContent,
+                        )
+                    } else {
+                        libraryItemContent()
                     }
                 },
                 scrollState = libraryGridState,
@@ -396,6 +418,7 @@ internal fun MobileSongCollectionScreen(
         localPlaylistId?.let { database.dao().playlist(it) } ?: flowOf(null)
     }.collectAsState(null)
     val isStoredCollection = localPlaylistId == null && type in setOf("downloaded", "cached")
+    val isCachedCollection = localPlaylistId == null && type == "cached"
     val isLikedCollection = localPlaylistId == null && type == "liked"
     val isTopCollection = localPlaylistId == null && type == "top100"
     var topPeriod by remember(type) { mutableStateOf(TopPlaylistPeriod.ALL_TIME) }
@@ -421,8 +444,15 @@ internal fun MobileSongCollectionScreen(
             defaultCollectionSort,
             defaultCollectionDirection,
         )
-    val collectionSort = collectionSorting.sort
+    val collectionSort =
+        collectionSorting.sort.let { saved ->
+            if (isCachedCollection || saved != CollectionSort.MANUAL) saved else CollectionSort.NEWEST
+        }
     val collectionDirection = collectionSorting.direction
+    val cachedCustomOrder =
+        remember(isCachedCollection, Settings.shared.cachedSongsCustomOrder) {
+            if (isCachedCollection) Settings.shared.cachedSongsOrder() else emptyList()
+        }
     val countIds =
         remember(isStoredCollection, collectionSort, collectionEntries) {
             if (isStoredCollection && collectionSort == CollectionSort.MOST_PLAYED) collectionEntries.map { it.songId } else emptyList()
@@ -468,7 +498,7 @@ internal fun MobileSongCollectionScreen(
         )
     val playlistSort = playlistSorting.sort
     val playlistSortDirection = playlistSorting.direction
-    var playlistReorderMode by remember(type, localPlaylistId) { mutableStateOf(false) }
+    val playlistReorderMode = playlistSort.isReordering(Settings.shared.playlistEditLock, localPlaylistId != null || type == "liked")
     val selection = rememberSelectionState(localPlaylistId ?: type)
     LaunchedEffect(downloadFilterState) { selection.exit() }
     var selectionQuery by remember(localPlaylistId ?: type) { mutableStateOf("") }
@@ -527,22 +557,11 @@ internal fun MobileSongCollectionScreen(
 
                             "downloaded" -> {
                                 database.dao().cachedAudioByKind(KIND_DOWNLOAD).collect { entries ->
+                                    val storedSongs = database.dao().getSongsByIds(entries.map { it.songId }).associateBy { it.id }
                                     collectionEntries = entries
                                     loadedSongs =
                                         entries.filter(::isAvailableDownload).map { entry ->
-                                            SongItem(
-                                                id = entry.songId,
-                                                title = entry.title,
-                                                thumbnail = entry.thumbnailUrl,
-                                                artists =
-                                                    entry.artist.split(",").mapNotNull { name ->
-                                                        name.trim().takeIf { it.isNotBlank() && it != "Unknown" }?.let {
-                                                            ArtistTiny(id = null, name = it)
-                                                        }
-                                                    },
-                                                album = null,
-                                                duration = null,
-                                            )
+                                            entry.toSongItem(storedSongs[entry.songId])
                                         }
                                     isLoading = false
                                 }
@@ -562,22 +581,11 @@ internal fun MobileSongCollectionScreen(
 
                             "cached" -> {
                                 database.dao().cachedAudioByKind(KIND_CACHE).collect { entries ->
+                                    val storedSongs = database.dao().getSongsByIds(entries.map { it.songId }).associateBy { it.id }
                                     collectionEntries = entries
                                     loadedSongs =
                                         entries.map { entry ->
-                                            SongItem(
-                                                id = entry.songId,
-                                                title = entry.title,
-                                                thumbnail = entry.thumbnailUrl,
-                                                artists =
-                                                    entry.artist.split(",").mapNotNull { name ->
-                                                        name.trim().takeIf { it.isNotBlank() && it != "Unknown" }?.let {
-                                                            ArtistTiny(id = null, name = it)
-                                                        }
-                                                    },
-                                                album = null,
-                                                duration = null,
-                                            )
+                                            entry.toSongItem(storedSongs[entry.songId])
                                         }
                                     isLoading = false
                                 }
@@ -632,15 +640,18 @@ internal fun MobileSongCollectionScreen(
     }
 
     val likedSongRecency = SongLikeState.likedSongRecency
+    val listeningTimes = if (playlistSort == PlaylistSongSort.LISTENING_TIME) SongMetadataState.listeningTimes else emptyMap()
     val playlistEntries = remember(playlistReorder.entries, blocked) { playlistReorder.entries.filterNot { blocked.isBlocked(it.first) } }
     val baseSongs =
         remember(localPlaylistId, playlistEntries, loadedSongs, blocked) {
             if (localPlaylistId != null) playlistEntries.map { it.first } else loadedSongs.filterNot(blocked::isBlocked)
         }
+    val artistAliases = if (isStoredCollection && collectionSort == CollectionSort.ARTIST) ArtistNameAliases.aliases else emptyMap()
     val songs =
         remember(
             baseSongs,
             likedSongRecency,
+            listeningTimes,
             isLikedCollection,
             isTopCollection,
             topDirection,
@@ -648,26 +659,35 @@ internal fun MobileSongCollectionScreen(
             playlistSortDirection,
             playlistReorderMode,
             isStoredCollection,
+            isCachedCollection,
             metadata,
             downloadFilterState,
             collectionQuery,
             collectionSort,
             collectionDirection,
+            cachedCustomOrder,
+            artistAliases,
         ) {
             if (isStoredCollection) {
                 (
                     downloadFilterState?.apply(
                         baseSongs,
                     ) ?: baseSongs
-                ).presentCollection(collectionQuery, collectionSort, collectionDirection) {
+                ).presentCollection(
+                    collectionQuery,
+                    collectionSort,
+                    collectionDirection,
+                    customOrder = if (isCachedCollection) cachedCustomOrder else emptyList(),
+                    artistAliases = artistAliases,
+                ) {
                     metadata[it.id]
                 }
             } else if (isTopCollection) {
                 baseSongs.sortedForTopPlaylist(topDirection)
             } else if (localPlaylistId != null && !playlistReorderMode) {
-                baseSongs.sortedForPlaylist(playlistSort, playlistSortDirection)
+                baseSongs.sortedForPlaylist(playlistSort, playlistSortDirection, listeningTimes = listeningTimes)
             } else if (isLikedCollection && !playlistReorderMode) {
-                baseSongs.sortedForLikedPlaylist(playlistSort, playlistSortDirection, likedSongRecency)
+                baseSongs.sortedForLikedPlaylist(playlistSort, playlistSortDirection, likedSongRecency, listeningTimes)
             } else {
                 baseSongs
             }
@@ -926,7 +946,12 @@ internal fun MobileSongCollectionScreen(
                             Column {
                                 CollectionFilterBar(
                                     showSearch = false,
-                                    text = collectionFilterBarText(),
+                                    text =
+                                        collectionFilterBarText(
+                                            includeManual =
+                                                isCachedCollection &&
+                                                    (collectionSort == CollectionSort.MANUAL || cachedCustomOrder.isNotEmpty()),
+                                        ),
                                     query = collectionQuery,
                                     onQueryChange = { collectionQuery = it },
                                     sort = collectionSort,
@@ -979,7 +1004,7 @@ internal fun MobileSongCollectionScreen(
                                     )
                                 },
                                 onReorderModeChange = {
-                                    playlistReorderMode = it
+                                    Settings.shared.playlistEditLock = !it
                                 },
                                 modifier = Modifier.padding(vertical = 8.dp),
                             )
@@ -991,6 +1016,8 @@ internal fun MobileSongCollectionScreen(
                 fallbackIcon = fallbackIcon,
                 cover = if (localPlaylistId == null && customCover == null) libraryCover(type) else null,
                 currentSongId = playbackState.currentSongId,
+                currentQueueItemId = playbackState.originalQueueItemId,
+                currentSongOccurrenceKey = playbackState.currentSongOccurrenceKey,
                 isPlaying = playbackState.isPlaying,
                 contentPadding = PaddingValues(bottom = bottomContentPadding),
                 modifier = modifier.fillMaxSize(),

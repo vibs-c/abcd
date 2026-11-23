@@ -13,6 +13,7 @@ import com.metrolist.shared.db.withDatabaseTransaction
 import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.unknown_artist
 import com.metrolist.shared.model.ArtistTiny
+import com.metrolist.shared.model.CollectionMeta
 import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.artworkExplicitness
 import com.metrolist.shared.model.isPodcast
@@ -158,6 +159,8 @@ object SongCacheManager {
     val cachedSongIds: StateFlow<Set<String>> = _cachedSongIds.asStateFlow()
     private val _cachedSongs = MutableStateFlow<List<CachedSongEntry>>(emptyList())
     val cachedSongs: StateFlow<List<CachedSongEntry>> = _cachedSongs.asStateFlow()
+    private val _accessTimeRevision = MutableStateFlow(0L)
+    val accessTimeRevision: StateFlow<Long> = _accessTimeRevision.asStateFlow()
     private val _cacheSizeBytes = MutableStateFlow(0L)
     private val settingsDir by lazy {
         File(
@@ -303,6 +306,7 @@ object SongCacheManager {
                         ?.takeIf { safeFile(it.filePath)?.let { file -> file.isFile && file.length() >= 1024L } == true }
                         ?: return@synchronized null
                 accessTimes.record(songId, System.currentTimeMillis())
+                _accessTimeRevision.value += 1L
                 if (accessSaveJob?.isActive != true) {
                     accessSaveJob =
                         scope.launch {
@@ -323,6 +327,28 @@ object SongCacheManager {
     fun getCacheSizeMB(): Long = getCacheSizeBytes() / (1024 * 1024)
 
     fun getCachedSongs(): List<CachedSongEntry> = _cachedSongs.value.filter { it.songId in _cachedSongIds.value }
+
+    /** Returns the latest access timestamp per entry across persisted, published, and pending in-memory updates. */
+    fun effectiveLastAccessedTimes(entries: List<CachedSongEntry>): Map<String, Long> =
+        synchronized(indexLock) {
+            entries.associate { entry ->
+                val publishedLastAccessed = entriesById[entry.songId]?.lastAccessedAt ?: Long.MIN_VALUE
+                entry.songId to maxOf(publishedLastAccessed, accessTimes.effective(entry))
+            }
+        }
+
+    /** Builds collection sorting metadata for [entries] with effective in-memory access times. */
+    fun cachedCollectionMetadata(entries: List<CachedSongEntry>): Map<String, CollectionMeta> =
+        effectiveLastAccessedTimes(entries).let { lastAccessed ->
+            entries.associate { entry ->
+                entry.songId to
+                    CollectionMeta(
+                        timestamp = entry.cachedAt,
+                        fileSize = entry.fileSize,
+                        lastAccessed = lastAccessed[entry.songId] ?: entry.lastAccessedAt,
+                    )
+            }
+        }
 
     private fun extension(
         contentType: String?,
@@ -357,9 +383,16 @@ object SongCacheManager {
                     headers.forEach { (name, value) -> header(name, value) }
                 }.execute { response ->
                     if (!response.status.isSuccess()) return@execute null
+                    val range =
+                        if (response.status.value == 206) {
+                            parseHttpByteRange(response.headers["Content-Range"])
+                                ?.takeIf { it.start == 0L && it.end == it.total - 1 } ?: return@execute null
+                        } else {
+                            null
+                        }
                     val limit = minOf(if (image) MAX_THUMBNAIL_BYTES else MAX_AUDIO_BYTES, maxBytes)
                     if (limit <= 0L) return@execute null
-                    val expected = response.headers["Content-Length"]?.toLongOrNull()
+                    val expected = range?.total ?: response.headers["Content-Length"]?.toLongOrNull()
                     if (expected != null && expected > limit) return@execute null
                     if (cacheDir.usableSpace <= (expected ?: 1024L) + 1024 * 1024) return@execute null
                     val destination = cacheFile(baseName + extension(response.headers["Content-Type"], image))
@@ -428,7 +461,7 @@ object SongCacheManager {
     suspend fun prefetchPlayback(resource: PlaybackResource) {
         try {
             if (!automaticCachingEnabled()) return
-            if (getCachedPlaybackResource(resource.musicVideoId ?: resource.videoId, song = null) != null) return
+            if (cachedEntry(resource.musicVideoId ?: resource.videoId) != null) return
             val budget = playbackCacheBudget()
             if (budget < 1024L) return
             val size = resource.contentLengthBytes ?: return
@@ -625,7 +658,7 @@ object SongCacheManager {
         if (songIds.isEmpty()) return
         synchronized(indexLock) {
             songIds.forEach { jobs.remove(it)?.cancel() }
-            removeCachedSongs(_cachedSongs.value, songIds, ::safeFile, ::saveAndPublish)
+            removeCachedSongs(_cachedSongs.value, songIds, ::safeFile, save = ::saveAndPublish)
         }
     }
 
@@ -677,11 +710,14 @@ object SongCacheManager {
                     requestedBytes,
                 )
             if (evictionCount > 0) {
-                entries.take(evictionCount).forEach { entry ->
-                    safeFile(entry.filePath)?.delete()
-                    entry.thumbnailPath?.let(::safeFile)?.delete()
-                }
-                saveAndPublish(entries.drop(evictionCount))
+                val candidates = entries.take(evictionCount)
+                removeCachedSongs(
+                    candidates,
+                    candidates.mapTo(mutableSetOf()) { it.songId },
+                    ::safeFile,
+                    onDeleteFailure = { AppLogger.warning("SongCacheManager", "Could not evict a cache entry", it) },
+                    save = { retained -> saveAndPublish(retained + entries.drop(evictionCount)) },
+                )
             }
             (maximum - _cacheSizeBytes.value).coerceAtLeast(0L)
         }
@@ -706,6 +742,7 @@ internal fun removeCachedSongs(
     entries: List<CachedSongEntry>,
     songIds: Set<String>,
     safeFile: (String) -> File?,
+    onDeleteFailure: (Exception) -> Unit = { throw it },
     save: (List<CachedSongEntry>) -> Unit,
 ) {
     var failure: Exception? = null
@@ -724,5 +761,5 @@ internal fun removeCachedSongs(
             }
         }
     save(remaining)
-    failure?.let { throw it }
+    failure?.let(onDeleteFailure)
 }

@@ -4,8 +4,7 @@ import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.isPodcast
 import com.metrolist.shared.playback.MusicPlayer
 import com.metrolist.shared.playback.MusicQueue
-import com.metrolist.shared.playback.playbackFadeThroughGains
-import com.metrolist.shared.playback.shouldPromotePlaybackCrossfade
+import com.metrolist.shared.playback.playbackCrossfadeGains
 import com.metrolist.shared.settings.Settings
 import com.metrolist.shared.youtube.playback.PlaybackResource
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +49,12 @@ internal class DesktopQueueTransitions(
     private var preloadSong: SongItem? = null
     private var preloadResource: PlaybackResource? = null
     private var preloadInstanceId = 0L
+    private var retiredPlaybackInstanceId: Long? = null
+
+    fun retireCurrentPlayback() {
+        retiredPlaybackInstanceId = player.currentPlaybackInstanceId
+        pendingEof = false
+    }
 
     fun cancel() {
         crossfadeJob?.cancel()
@@ -77,11 +82,16 @@ internal class DesktopQueueTransitions(
         return outgoing
     }
 
-    fun acceptsEof(instanceId: Long): Boolean =
-        (isCrossfading && instanceId == originalInstanceId) || instanceId == player.currentPlaybackInstanceId
+    fun acceptsPlaybackEvent(instanceId: Long): Boolean {
+        if (retiredPlaybackInstanceId != null && player.currentPlaybackInstanceId != retiredPlaybackInstanceId) {
+            retiredPlaybackInstanceId = null
+        }
+        if (instanceId == retiredPlaybackInstanceId) return false
+        return (isCrossfading && instanceId == originalInstanceId) || instanceId == player.currentPlaybackInstanceId
+    }
 
     fun onEof(instanceId: Long): Boolean {
-        if (!acceptsEof(instanceId)) return true
+        if (!acceptsPlaybackEvent(instanceId)) return true
         if (!allowed() || !hasCurrentTarget()) {
             cancel()
             return false
@@ -215,53 +225,26 @@ internal class DesktopQueueTransitions(
         isCrossfading = true
         player.isCrossfading = true
         video.stopVideo()
+        player.setNextVolume(0f)
+        if (!player.startNextPlayback(token)) {
+            abortCrossfade()
+            return
+        }
         val startPosition = player.currentPosition.value
         val clock = DesktopCrossfadeClock(startPosition, fadeDurationMs)
         var progress = 0f
-        var promoted = false
         while (progress < 1f) {
-            if (!allowed() || (!promoted && (!hasCurrentTarget() || !player.isPreloadedNextActive(token)))) {
+            if (!allowed() || !hasCurrentTarget() || !player.isPreloadedNextActive(token) || player.nextPlayerFailed) {
                 abortCrossfade()
                 return
             }
             val sampledPosition = player.currentPosition.value
             val sampledPlaying = player.isPlaying.value
             progress = maxOf(progress, clock.sample(sampledPosition, player.playbackSpeed.value, sampledPlaying, pendingEof))
-            val (outgoingGain, incomingGain) = playbackFadeThroughGains(progress)
-            if (promoted) {
-                player.setTransitionVolume(incomingGain * 100f)
-            } else {
+            if (sampledPlaying || pendingEof) {
+                val (outgoingGain, incomingGain) = playbackCrossfadeGains(progress)
                 player.setTransitionVolume(outgoingGain * 100f)
                 player.setNextVolume(incomingGain * 100f)
-                if (shouldPromotePlaybackCrossfade(incomingGain)) {
-                    val incomingStartPosition = player.nextPlayerPosition
-                    promoted =
-                        player.swapToNext(
-                            token,
-                            resource,
-                            beforeResume = {
-                                queue.getNext()
-                                player.setCurrentSong(next, resource)
-                            },
-                            initialTransitionGain = incomingGain,
-                        )
-                    if (!promoted) {
-                        player.setTransitionVolume(100f)
-                        abortCrossfade()
-                        return
-                    }
-                    clock.rebase(incomingStartPosition)
-                    preloadToken = null
-                    preloadSong = null
-                    preloadResource = null
-                    targetKey = null
-                    targetSongId = null
-                    onSongChanged(next, resource, originalSong?.id)
-                    originalSong = null
-                    originalResource = null
-                    originalInstanceId = 0L
-                    pendingEof = false
-                }
             }
             if (progress < 1f) {
                 combine(
@@ -270,14 +253,30 @@ internal class DesktopQueueTransitions(
                     player.playbackStateChanges,
                     pendingEofState,
                 ) { position, playing, _, eof ->
-                    position != sampledPosition || playing != sampledPlaying || eof || (!promoted && player.nextPlayerFailed)
+                    position != sampledPosition || playing != sampledPlaying || eof || player.nextPlayerFailed
                 }.first { it }
             }
         }
+        val promoted =
+            player.swapToNext(
+                token,
+                resource,
+                startPlaying = pendingEof || player.wantsPlayback,
+                beforeResume = {
+                    queue.getNext()
+                    player.setCurrentSong(next, resource)
+                },
+            )
         if (!promoted) {
             abortCrossfade()
             return
         }
+        preloadToken = null
+        preloadSong = null
+        preloadResource = null
+        targetKey = null
+        targetSongId = null
+        onSongChanged(next, resource, originalSong?.id)
         player.setTransitionVolume(100f)
         player.setNextVolume(0f)
         player.setCrossfadeSampling(null)
@@ -325,10 +324,6 @@ internal class DesktopCrossfadeClock(
     private val durationMs: Long,
 ) {
     private var elapsedMs = 0.0
-
-    fun rebase(positionMs: Long) {
-        lastPositionMs = positionMs
-    }
 
     fun sample(
         positionMs: Long,

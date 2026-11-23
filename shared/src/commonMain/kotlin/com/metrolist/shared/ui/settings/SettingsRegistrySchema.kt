@@ -71,6 +71,7 @@ enum class SettingsChangeEffect {
     CONTENT,
     SENTRY,
     AUTO_DOWNLOAD_ON_LIKE,
+    AUTO_DOWNLOAD_SAVED_COLLECTIONS,
     RESTART,
     PLAYBACK_SPEED,
     PLAYBACK_PITCH,
@@ -128,10 +129,12 @@ data class SharedSettingsHost(
     val fontDownloadActions: List<SettingsHostAction> = emptyList(),
     val privacyDiagnosticActions: List<SettingsHostAction> = emptyList(),
     val onClearSearchHistory: (() -> Unit)? = null,
-    val onSpotifySignIn: (() -> Unit)? = null,
     val onSwitchYouTubeChannel: (() -> Unit)? = null,
     val customPageIcons: Map<SettingsPageId, @Composable (Color) -> Unit> = emptyMap(),
     val pageContent: @Composable (SettingsPageId, onBack: () -> Unit, onNavigate: (SettingsPageId) -> Unit) -> Unit = { _, _, _ -> },
+    // Pages that support a pull-to-refresh gesture; the callback runs that page's refresh action.
+    val refreshablePages: Set<SettingsPageId> = emptySet(),
+    val onPageRefresh: (SettingsPageId) -> Unit = {},
     val rememberMetroEqProfilePicker: (@Composable (onPicked: (fileName: String, content: String) -> Unit) -> () -> Unit)? = null,
 )
 

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import com.metrolist.desktop.backup.DesktopAutomaticBackupScheduler
 import com.metrolist.desktop.backup.DesktopBackupRestoreManager
 import com.metrolist.desktop.spotifyimport.DesktopAmazonMusicImportFlow
 import com.metrolist.desktop.spotifyimport.DesktopAppleMusicImportFlow
@@ -55,6 +57,9 @@ import com.metrolist.desktop.spotifyimport.DesktopTidalImportFlow
 import com.metrolist.desktop.state.app.AppState
 import com.metrolist.desktop.state.content.LibraryContentState
 import com.metrolist.desktop.state.playback.validatedLocalMediaUrl
+import com.metrolist.desktop.utils.pickDesktopFile
+import com.metrolist.desktop.utils.saveDesktopFile
+import com.metrolist.shared.backup.AutoBackupFrequency
 import com.metrolist.shared.backup.defaultBackupFilename
 import com.metrolist.shared.backup.foreignImportMessage
 import com.metrolist.shared.backup.importForeignBackup
@@ -65,6 +70,16 @@ import com.metrolist.shared.generated.resources.Res
 import com.metrolist.shared.generated.resources.action_backup
 import com.metrolist.shared.generated.resources.action_restore
 import com.metrolist.shared.generated.resources.app_data
+import com.metrolist.shared.generated.resources.automatic_backup
+import com.metrolist.shared.generated.resources.automatic_backup_daily
+import com.metrolist.shared.generated.resources.automatic_backup_description
+import com.metrolist.shared.generated.resources.automatic_backup_frequency
+import com.metrolist.shared.generated.resources.automatic_backup_location
+import com.metrolist.shared.generated.resources.automatic_backup_monthly
+import com.metrolist.shared.generated.resources.automatic_backup_restore
+import com.metrolist.shared.generated.resources.automatic_backup_restore_desc
+import com.metrolist.shared.generated.resources.automatic_backup_restore_empty
+import com.metrolist.shared.generated.resources.automatic_backup_weekly
 import com.metrolist.shared.generated.resources.backup_create_failed
 import com.metrolist.shared.generated.resources.backup_create_success
 import com.metrolist.shared.generated.resources.backup_created
@@ -174,6 +189,7 @@ import com.metrolist.shared.playlistimport.PlaylistImportStatusManager
 import com.metrolist.shared.playlistimport.UnifiedPlaylistImporter
 import com.metrolist.shared.playlistimport.UniversalPlaylistParser
 import com.metrolist.shared.playlistimport.readPlaylistText
+import com.metrolist.shared.settings.Settings
 import com.metrolist.shared.state.GlobalYouTubeRepository
 import com.metrolist.shared.ui.components.AlertDialog
 import com.metrolist.shared.ui.components.Dialog
@@ -184,11 +200,6 @@ import com.metrolist.shared.ui.menu.CsvColumnMappingDialog
 import com.metrolist.shared.ui.utils.DragScrollableColumn
 import com.metrolist.shared.ui.utils.verticalScrollWithDrag
 import com.metrolist.shared.utils.XdgUtils
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
-import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.openFilePicker
-import io.github.vinceglb.filekit.dialogs.openFileSaver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -343,6 +354,7 @@ private fun ProviderImportDialog(
 @Suppress("FunctionName")
 fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
     val scope = rememberCoroutineScope()
+    val appSettings = Settings.shared
     val database: MusicDatabase = koinInject()
 
     val playlistImportManager =
@@ -356,6 +368,8 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
     var showBackupWarning by remember { mutableStateOf(false) }
     var warningSeconds by remember { mutableIntStateOf(5) }
     var restoreFile by remember { mutableStateOf<File?>(null) }
+    var automaticBackups by remember { mutableStateOf<List<File>>(emptyList()) }
+    var showAutomaticBackupPicker by remember { mutableStateOf(false) }
     var isRestoring by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
 
@@ -429,6 +443,8 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                         if (dup != null) {
                             duplicateWarning = dup
                             pendingDuplicateDestination = destination
+                            // The destination picker cleared it; "Import anyway" needs it again.
+                            pendingImportData = data
                             PlaylistImportStatusManager.clear(statusId)
                             return@launch
                         }
@@ -613,6 +629,45 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                 items =
                     listOf(
                         Material3SettingsItem(
+                            title = { Text(stringResource(Res.string.automatic_backup)) },
+                            description = {
+                                Text(
+                                    "${stringResource(Res.string.automatic_backup_description)}\n" +
+                                        stringResource(Res.string.automatic_backup_location),
+                                )
+                            },
+                            checked = appSettings.autoBackupEnabled,
+                            trailingContent = { SettingsSwitch(appSettings.autoBackupEnabled) },
+                            onClick = {
+                                appSettings.autoBackupEnabled = !appSettings.autoBackupEnabled
+                                DesktopAutomaticBackupScheduler.schedule()
+                            },
+                        ),
+                        Material3SettingsItem(
+                            title = { Text(stringResource(Res.string.automatic_backup_frequency)) },
+                            description = {
+                                Text(
+                                    stringResource(
+                                        when (AutoBackupFrequency.fromSetting(appSettings.autoBackupFrequency)) {
+                                            AutoBackupFrequency.DAILY -> Res.string.automatic_backup_daily
+                                            AutoBackupFrequency.WEEKLY -> Res.string.automatic_backup_weekly
+                                            AutoBackupFrequency.MONTHLY -> Res.string.automatic_backup_monthly
+                                        },
+                                    ),
+                                )
+                            },
+                            enabled = appSettings.autoBackupEnabled,
+                            onClick = {
+                                appSettings.autoBackupFrequency =
+                                    when (AutoBackupFrequency.fromSetting(appSettings.autoBackupFrequency)) {
+                                        AutoBackupFrequency.DAILY -> AutoBackupFrequency.WEEKLY
+                                        AutoBackupFrequency.WEEKLY -> AutoBackupFrequency.MONTHLY
+                                        AutoBackupFrequency.MONTHLY -> AutoBackupFrequency.DAILY
+                                    }.name
+                                DesktopAutomaticBackupScheduler.schedule()
+                            },
+                        ),
+                        Material3SettingsItem(
                             title = { Text(stringResource(Res.string.create_backup)) },
                             description = { Text(stringResource(Res.string.create_backup_desc)) },
                             onClick = { showBackupWarning = true },
@@ -623,12 +678,19 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                             onClick = {
                                 scope.launch {
                                     runCatching {
-                                        FileKit.openFilePicker(
-                                            type = FileKitType.File(listOf("zip", "backup")),
-                                            dialogSettings = FileKitDialogSettings(title = restorePickerTitle),
-                                        )
-                                    }.onSuccess { selected -> restoreFile = selected?.file }
+                                        pickDesktopFile(restorePickerTitle, listOf("zip", "backup"))
+                                    }.onSuccess { selected -> restoreFile = selected }
                                         .onFailure { status = getString(Res.string.could_not_open_file_picker, it.message ?: "") }
+                                }
+                            },
+                        ),
+                        Material3SettingsItem(
+                            title = { Text(stringResource(Res.string.automatic_backup_restore)) },
+                            description = { Text(stringResource(Res.string.automatic_backup_restore_desc)) },
+                            onClick = {
+                                scope.launch {
+                                    automaticBackups = withContext(Dispatchers.IO) { DesktopAutomaticBackupScheduler.listBackups() }
+                                    showAutomaticBackupPicker = true
                                 }
                             },
                         ),
@@ -642,10 +704,9 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                                 scope.launch {
                                     val file =
                                         runCatching {
-                                            FileKit.openFilePicker(dialogSettings = FileKitDialogSettings(title = restorePickerTitle))
+                                            pickDesktopFile(restorePickerTitle)
                                         }.onFailure { status = getString(Res.string.could_not_open_file_picker, it.message ?: "") }
-                                            .getOrNull()
-                                            ?.file ?: return@launch
+                                            .getOrNull() ?: return@launch
                                     isBusy = true
                                     val result =
                                         withContext(Dispatchers.IO) {
@@ -730,12 +791,12 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                             onClick = {
                                 scope.launch {
                                     runCatching {
-                                        FileKit.openFilePicker(
-                                            type = FileKitType.File(listOf("csv", "tsv", "m3u", "m3u8", "json", "txt")),
-                                            dialogSettings = FileKitDialogSettings(title = getString(Res.string.import_action_choose_file)),
+                                        pickDesktopFile(
+                                            getString(Res.string.import_action_choose_file),
+                                            listOf("csv", "tsv", "m3u", "m3u8", "json", "txt"),
                                         )
                                     }.onSuccess { selected ->
-                                        val file = selected?.file ?: return@onSuccess
+                                        val file = selected ?: return@onSuccess
                                         scope.launch(Dispatchers.Default) {
                                             runCatching {
                                                 val content = withContext(Dispatchers.IO) { file.inputStream().use(::readPlaylistText) }
@@ -794,14 +855,13 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
                         showBackupWarning = false
                         scope.launch {
                             runCatching {
-                                FileKit.openFileSaver(
+                                saveDesktopFile(
+                                    title = createBackupDialogTitle,
                                     suggestedName = defaultBackupFilename(backupFilenamePrefix),
-                                    defaultExtension = "zip",
-                                    allowedExtensions = setOf("zip"),
-                                    dialogSettings = FileKitDialogSettings(title = createBackupDialogTitle),
+                                    extension = "zip",
                                 )
                             }.onSuccess { selected ->
-                                val destination = selected?.file ?: return@onSuccess
+                                val destination = selected ?: return@onSuccess
                                 val result = withContext(Dispatchers.IO) { DesktopBackupRestoreManager.backup(destination) }
                                 status = result.fold({ backupCreated }, { getString(Res.string.backup_failed, it.message ?: "") })
                             }.onFailure { status = getString(Res.string.could_not_open_file_picker, it.message ?: "") }
@@ -855,6 +915,37 @@ fun BackupRestoreSettingsScreen(colorScheme: ColorScheme) {
             },
             dismissButton = {
                 TextButton(onClick = { restoreFile = null }, shapes = ButtonDefaults.shapes()) { Text(stringResource(Res.string.cancel)) }
+            },
+        )
+    }
+
+    PopupVisibility(visible = showAutomaticBackupPicker) {
+        AlertDialog(
+            onDismissRequest = { showAutomaticBackupPicker = false },
+            title = { Text(stringResource(Res.string.automatic_backup)) },
+            text = {
+                if (automaticBackups.isEmpty()) {
+                    Text(stringResource(Res.string.automatic_backup_restore_empty))
+                } else {
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(automaticBackups) { file ->
+                            TextButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    showAutomaticBackupPicker = false
+                                    restoreFile = file
+                                },
+                            ) {
+                                Text(file.name)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAutomaticBackupPicker = false }) {
+                    Text(stringResource(Res.string.close))
+                }
             },
         )
     }

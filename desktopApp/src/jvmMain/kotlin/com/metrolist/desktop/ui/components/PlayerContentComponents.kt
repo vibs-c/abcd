@@ -6,7 +6,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +46,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
@@ -88,6 +88,7 @@ import com.metrolist.shared.ui.components.PlayerPrimaryControls
 import com.metrolist.shared.ui.components.PopupVisibility
 import com.metrolist.shared.ui.components.VintagePlayerControls
 import com.metrolist.shared.ui.components.VintagePlayerControlsText
+import com.metrolist.shared.ui.components.playbackMarquee
 import com.metrolist.shared.ui.icons.MetrolistIcons
 import com.metrolist.shared.ui.menu.cursorContextMenu
 import com.metrolist.shared.ui.menu.rememberCursorContextMenuState
@@ -194,7 +195,15 @@ fun PlayerCoreContent(
 
             val isSolid = Settings.shared.playerBackgroundStyle == PlayerBackgroundStyle.SOLID
             val textBackgroundColor by animateColorAsState(
-                targetValue = if (isSolid) MaterialTheme.colorScheme.onSurface else Color.White,
+                targetValue =
+                    when {
+                        isSolid -> MaterialTheme.colorScheme.onSurface
+
+                        Settings.shared.playerBackgroundStyle == PlayerBackgroundStyle.LIQUID &&
+                            MaterialTheme.colorScheme.surface.luminance() >= 0.5f -> Color.Black
+
+                        else -> Color.White
+                    },
                 label = "PlayerContentTextColor",
             )
 
@@ -224,7 +233,7 @@ fun PlayerCoreContent(
                                         PlayerState.exitExpanded()
                                         PlaylistAlbumState.openSongAlbum(song)
                                     }
-                                }.basicMarquee(
+                                }.playbackMarquee(
                                     iterations = if (UiState.videoFullscreenObscuresPlayer) 0 else 1,
                                     initialDelayMillis = 2000,
                                     velocity = 30.dp,
@@ -485,12 +494,27 @@ fun PlayerProgressSection() {
     }
 
     val displayPosition = {
-        if (isDragging || pendingSeekTargetMs != null) (sliderValue * duration).toLong() else position.value
+        when {
+            isDragging || pendingSeekTargetMs != null -> (sliderValue * duration).toLong()
+
+            isLive -> position.value
+
+            // The seek bar's clock, so the label changes in the same repaint as a progress step.
+            else -> smoothPosition.longValue
+        }
     }
 
     val isSolid = Settings.shared.playerBackgroundStyle == PlayerBackgroundStyle.SOLID
     val textSecondaryColor by animateColorAsState(
-        targetValue = if (isSolid) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = 0.7f),
+        targetValue =
+            when {
+                isSolid -> MaterialTheme.colorScheme.onSurfaceVariant
+
+                Settings.shared.playerBackgroundStyle == PlayerBackgroundStyle.LIQUID &&
+                    MaterialTheme.colorScheme.surface.luminance() >= 0.5f -> Color.Black.copy(alpha = 0.7f)
+
+                else -> Color.White.copy(alpha = 0.7f)
+            },
         label = "PlayerProgressDurationColor",
     )
 

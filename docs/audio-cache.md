@@ -16,6 +16,8 @@ Pre-cache resolves upcoming tracks without taking playback ownership. Preserve q
 
 Restore download queues before accepting mutations or draining work. Retain completed files when a later transfer or metadata write fails. Preserve existing destinations during replacement and migration. Reconcile missing files without replacing complete remote playlist membership with an offline snapshot.
 
+Android song-mode playback, preloading and returning from video mode keep the selected recording when its downloaded audio is available. Streamed video audio in the playback cache can still resolve a studio counterpart online, with the cache retained as a fallback.
+
 Android and desktop downloaded collections can filter by a library playlist before search and sorting. Selection, playback and removal operate on visible results. Playlist download state uses stored membership, including entries the user has not opened in the current session.
 
 Remote playlist download refreshes store every page of unfiltered membership. Offline playlist pages read those stored entries. Failed and offline refreshes keep the previous membership.
@@ -38,9 +40,9 @@ Storage screens count indexed audio once. Clearing the song cache removes indexe
 
 ## Formats
 
-Android shared-folder exports remux WebM/Opus to tagged Ogg Opus and AAC to tagged M4A without re-encoding. Conversion or tagging failure must not publish raw source files. Private storage keeps the original representation. Shared-cache migrations retain originals until replacement files and format metadata commit.
+Android shared-folder exports remux WebM/Opus to tagged Ogg Opus and AAC to tagged M4A without re-encoding. New exports embed the retained PNG artwork when it is available, along with title, artist and album tags. Conversion or tagging failure must not publish raw source files. Private storage keeps the original representation. Shared-cache migrations retain originals until replacement files and format metadata commit.
 
-Desktop downloads transcode to tagged AAC/M4A before publication. Temporary JavaCPP tag strings, rational values and frame views are released at their call sites; partially initialized encoders and metadata dictionaries also have cleanup owners.
+Desktop downloads stream-copy Opus to tagged Ogg Opus and AAC to tagged M4A. Other codecs or failed copies fall back to AAC/M4A transcoding. Temporary JavaCPP tag strings, rational values and frame views are released at their call sites; partially initialized encoders and metadata dictionaries also have cleanup owners.
 
 SABR downloads and incomplete playback captures use validated transfers. Tokenless downloads renew sessions after 45 seconds of media and resume at a segment boundary. Renewal must preserve the encoded representation. Reject gaps, changed bytes and incomplete transfers; see [SABR constraints](innertube.md#sabr).
 
@@ -57,3 +59,5 @@ Finite MP4/WebM files and supported finite HLS playlists have a 32 MiB per-file 
 ## Verification
 
 Run affected [platform checks](checks.md#platform-checks). Use disposable storage to check cold-cache completion, seeks, crossfades, cache clear during capture, low disk space, failed migration and each download destination. On iOS, check that throttled capture does not block unrelated playback or republish after clear.
+
+On desktop, Auto download saved albums and playlists starts downloads only after saving succeeds. Albums finish loading their remaining tracks first. Playlists use complete stored membership or load all pages, and downloads continue after leaving the collection page. Unavailable and blocked songs are filtered through the normal download path.

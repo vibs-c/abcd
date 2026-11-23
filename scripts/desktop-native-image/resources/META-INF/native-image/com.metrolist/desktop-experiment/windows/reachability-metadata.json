@@ -1,6 +1,19 @@
 {
   "reflection": [
     {
+      "type": "com.sun.jna.Callback$UncaughtExceptionHandler",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "uncaughtException",
+          "parameterTypes": [
+            "com.sun.jna.Callback",
+            "java.lang.Throwable"
+          ]
+        }
+      ]
+    },
+    {
       "type": "com.metrolist.desktop.window.jna.User32Extend",
       "jniAccessible": true,
       "allDeclaredFields": true,
@@ -20,6 +33,17 @@
       "allDeclaredFields": true,
       "allDeclaredMethods": true,
       "allDeclaredConstructors": true
+    },
+    {
+      "type": "com.metrolist.desktop.input.WindowsPhysicalKeyHookProcedure",
+      "jniAccessible": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "com.metrolist.desktop.input.WindowsPhysicalKeyHookProcedureContract",
+      "jniAccessible": true,
+      "allDeclaredMethods": true
     },
     {
       "type": "com.metrolist.desktop.window.jna.structure.MENUITEMINFO",
@@ -400,7 +424,7 @@
           "name": "mainOwner"
         },
         {
-          "name": "_layersCopyCache"
+          "name": "layers"
         },
         {
           "name": "focusedLayer"
@@ -413,17 +437,6 @@
       "fields": [
         {
           "name": "owner"
-        }
-      ]
-    },
-    {
-      "type": "androidx.compose.ui.scene.CopiedList",
-      "methods": [
-        {
-          "name": "withCopy",
-          "parameterTypes": [
-            "kotlin.jvm.functions.Function1"
-          ]
         }
       ]
     },
@@ -4671,6 +4684,27 @@
           "com.sun.jna.platform.win32.Wtsapi32"
         ]
       }
+    },
+    {
+      "type": {
+        "proxy": [
+          "io.github.vinceglb.filekit.dialogs.platform.windows.jna.Shell32"
+        ]
+      }
+    },
+    {
+      "type": "io.github.vinceglb.filekit.dialogs.platform.windows.jna.Shell32",
+      "allPublicMethods": true
+    },
+    {
+      "type": "io.github.vinceglb.filekit.dialogs.platform.windows.jna.ShTypes$COMDLG_FILTERSPEC",
+      "allDeclaredFields": true,
+      "allPublicConstructors": true
+    },
+    {
+      "type": "io.github.vinceglb.filekit.dialogs.platform.windows.jna.ShTypes$PROPERTYKEY",
+      "allDeclaredFields": true,
+      "allPublicConstructors": true
     }
   ],
   "resources": [

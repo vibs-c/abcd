@@ -28,7 +28,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 @Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,19 +53,32 @@ class ModalSheetState internal constructor(
     private var pendingAnchors: DraggableAnchors<SheetValue>? = null
     private var animation: Job? = null
     private var wheelSettling: Job? = null
+    private val hiddenSlop = density
+    private var dismissalRequested by mutableStateOf(false)
+
+    internal val isDismissedByUser: Boolean get() = dismissalRequested && !isVisible
+
+    internal suspend fun observeDismissals(onDismiss: () -> Unit) {
+        snapshotFlow { isDismissedByUser }.collect { dismissed ->
+            if (dismissed) onDismiss()
+        }
+    }
 
     val isVisible: Boolean
-        get() =
-            isDragging || anchorsState.currentValue != SheetValue.Hidden || anchorsState.targetValue != SheetValue.Hidden ||
-                isAnimationRunning
+        get() {
+            if (isDragging) return true
+            if (anchorsState.targetValue == SheetValue.Hidden &&
+                anchorsState.offset >= anchorsState.anchors.positionOf(SheetValue.Hidden) - hiddenSlop
+            ) {
+                return false
+            }
+            return anchorsState.currentValue != SheetValue.Hidden || anchorsState.targetValue != SheetValue.Hidden || isAnimationRunning
+        }
 
-    private val settleSlop = 16f * density
-
-    // The spring's last pixels take long to settle; once the sheet is visually in place, taps must land.
+    // Input follows the target anchor: a visible sheet stays interactive while it slides in or settles.
+    // A sheet moving to Hidden keeps swallowing input, except while the user is still dragging it.
     internal val acceptsInput: Boolean by derivedStateOf {
-        val target = anchorsState.targetValue
-        val settling = target != SheetValue.Hidden && abs(anchorsState.offset - anchorsState.anchors.positionOf(target)) <= settleSlop
-        (isDragging || target != SheetValue.Hidden) && (!isAnimationRunning || settling)
+        isDragging || anchorsState.targetValue != SheetValue.Hidden
     }
 
     internal val isAnimationRunning: Boolean get() = anchorsState.isAnimationRunning
@@ -115,6 +127,7 @@ class ModalSheetState internal constructor(
         block: suspend DragScope.() -> Unit,
     ) {
         wheelSettling?.cancel()
+        dismissalRequested = false
         var started = false
         try {
             anchorsState.anchoredDrag(dragPriority) {
@@ -146,13 +159,13 @@ class ModalSheetState internal constructor(
     internal fun scrollBy(delta: Float): Float {
         wheelSettling?.cancel()
         animation?.cancel()
+        dismissalRequested = false
         return anchorsState.dispatchRawDelta(delta).also { if (it != 0f) isDragging = true }
     }
 
     internal fun scrollWheelBy(
         delta: Float,
         scope: CoroutineScope,
-        onDismiss: () -> Unit,
     ): Float {
         val consumed = scrollBy(delta)
         // Wheel events have no fling callback; settle after the last event in the burst.
@@ -160,15 +173,18 @@ class ModalSheetState internal constructor(
             scope.launch {
                 delay(150)
                 settle(0f)
-                if (!isVisible) onDismiss()
             }
         return consumed
     }
 
-    private suspend fun animateTo(value: SheetValue) {
+    private suspend fun animateTo(
+        value: SheetValue,
+        dismissParent: Boolean = false,
+    ) {
         wheelSettling?.cancel()
         snapshotFlow { anchorsState.anchors.size > 0 }.first { it }
         if (!confirmValueChange(value)) return
+        dismissalRequested = dismissParent
         finishDrag()
         val job = currentCoroutineContext()[Job]
         animation = job
@@ -189,15 +205,20 @@ class ModalSheetState internal constructor(
         )
     }
 
-    suspend fun hide(): Boolean {
+    suspend fun hide(): Boolean = hide(dismissParent = false)
+
+    internal suspend fun dismiss(): Boolean = hide(dismissParent = true)
+
+    private suspend fun hide(dismissParent: Boolean): Boolean {
         if (!confirmValueChange(SheetValue.Hidden)) return false
-        animateTo(SheetValue.Hidden)
+        animateTo(SheetValue.Hidden, dismissParent)
         return anchorsState.settledValue == SheetValue.Hidden
     }
 
     suspend fun expand() = animateTo(SheetValue.Expanded)
 
     internal suspend fun settle(velocity: Float) {
+        dismissalRequested = true
         finishDrag()
         val job = currentCoroutineContext()[Job]
         animation = job

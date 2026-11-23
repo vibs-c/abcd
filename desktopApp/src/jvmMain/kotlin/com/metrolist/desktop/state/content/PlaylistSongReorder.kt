@@ -40,13 +40,16 @@ internal fun Map<String, List<YTItem>>.reorderPlaylistSong(
     val targetIndex = songs.indexOfFirst { it.matches(target) }
     val insertionIndex = targetIndex + if (afterTarget) 1 else 0
     songs.add(insertionIndex, moving)
+    val successor = songs.getOrNull(insertionIndex + 1)
+    // A null remote successor means the end, not an existing occurrence without a server ID.
+    if (!local && successor != null && successor.playlistSetVideoId.isNullOrBlank()) return null
     val sections = filterKeys { it.equals("header", ignoreCase = true) || it.contains("suggest", ignoreCase = true) }
     return PlaylistSongReorder(
         sections = sections + ("songs" to songs),
         setVideoId = song.playlistSetVideoId,
         localMappingId = song.playlistLocalMappingId,
-        successorLocalMappingId = songs.getOrNull(insertionIndex + 1)?.playlistLocalMappingId,
-        successorSetVideoId = songs.getOrNull(insertionIndex + 1)?.playlistSetVideoId,
+        successorLocalMappingId = successor?.playlistLocalMappingId,
+        successorSetVideoId = successor?.playlistSetVideoId,
     )
 }
 
@@ -79,7 +82,7 @@ internal suspend fun commitRemotePlaylistReorder(
                         ?: dao.findPlaylistEntity("VL${playlistId.removePrefix("VL")}")
                         ?: dao.findPlaylistEntity(playlistId.removePrefix("VL"))
                 if (local != null) {
-                    val mappings = dao.playlistSongMaps(local.id, 0)
+                    val mappings = dao.playlistSongMaps(local.id, Int.MIN_VALUE)
                     val from = mappings.indexOfFirst { it.setVideoId == move.setVideoId }
                     val to =
                         if (move.successorSetVideoId != null) {
@@ -88,7 +91,7 @@ internal suspend fun commitRemotePlaylistReorder(
                         } else {
                             mappings.lastIndex
                         }
-                    if (from >= 0 && to >= 0 && from != to) dao.move(local.id, mappings[from].position, mappings[to].position)
+                    if (from >= 0 && to >= 0 && from != to) dao.moveMapping(local.id, mappings[from].id, mappings[to].id)
                 }
             }
         }

@@ -11,6 +11,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.os.Build
 import android.os.Process
+import android.system.Os
 import androidx.core.database.sqlite.transaction
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room3.exclusiveTransaction
@@ -52,6 +53,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.InputStream
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -139,18 +142,46 @@ class BackupRestoreManager(
     private val database: MusicDatabase,
 ) {
     suspend fun backup(uri: Uri): Result<Unit> =
+        backup { archive ->
+            context.contentResolver.openOutputStream(uri, "wt")?.use { output ->
+                archive.inputStream().buffered().use { it.copyTo(output) }
+                output.flush()
+            } ?: error("Could not open backup destination")
+        }
+
+    suspend fun backup(destination: File): Result<Unit> =
+        backup { archive ->
+            val liveDatabase = context.getDatabasePath(BACKUP_DATABASE_ENTRY)
+            val protectedPaths =
+                listOf(
+                    liveDatabase,
+                    File(liveDatabase.path + "-wal"),
+                    File(liveDatabase.path + "-shm"),
+                    File(liveDatabase.path + "-journal"),
+                ).map { it.canonicalFile }
+            check(destination.canonicalFile !in protectedPaths) { "Backup destination cannot replace the live database or its sidecars" }
+            check(destination.parentFile?.let { it.mkdirs() || it.isDirectory } != false) { "Could not create backup directory" }
+            val temporary = File(destination.parentFile, ".${destination.name}.tmp")
+            try {
+                archive.inputStream().buffered().use { input -> temporary.outputStream().buffered().use(input::copyTo) }
+                Os.rename(temporary.absolutePath, destination.absolutePath)
+            } finally {
+                temporary.delete()
+            }
+        }
+
+    private suspend fun backup(writeArchive: (File) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
                 DiscordTokenStore.migrateLegacyCredentials(context)
                 Settings.shared.flush()
                 database.useReaderConnection { }
                 val databasePath = context.getDatabasePath(BACKUP_DATABASE_ENTRY).path
-                val snapshot = File(context.cacheDir, "backup-$BACKUP_DATABASE_ENTRY").canonicalFile
-                val archive = File(context.cacheDir, "metrolist-backup.zip.tmp").canonicalFile
-                check(snapshot.parentFile?.let { it.mkdirs() || it.isDirectory } != false) { "Could not create backup directory" }
-                snapshot.delete()
-                archive.delete()
+                val staging = File(context.cacheDir, "metrolist-backup-${UUID.randomUUID()}")
+                check(staging.mkdir()) { "Could not create backup directory" }
                 try {
+                    val snapshot = File(staging, BACKUP_DATABASE_ENTRY)
+                    val archive = File(staging, "backup.zip")
                     createDatabaseSnapshot(File(databasePath), snapshot)
                     ZipOutputStream(archive.outputStream().buffered()).use { zip ->
                         zip.putNextEntry(ZipEntry(BACKUP_MANIFEST_ENTRY))
@@ -177,18 +208,18 @@ class BackupRestoreManager(
                         snapshot.inputStream().buffered().use { it.copyTo(zip, BackupArchiveLimits.DATABASE_BYTES) }
                         zip.closeEntry()
                     }
-                    context.contentResolver.openOutputStream(uri, "wt")?.use { output ->
-                        archive.inputStream().buffered().use { it.copyTo(output) }
-                        output.flush()
-                    } ?: error("Could not open backup destination")
+                    writeArchive(archive)
                 } finally {
-                    snapshot.delete()
-                    archive.delete()
+                    staging.deleteRecursively()
                 }
             }
         }
 
-    suspend fun restore(uri: Uri): Result<Unit> =
+    suspend fun restore(uri: Uri): Result<Unit> = restoreInput { context.contentResolver.openInputStream(uri) }
+
+    suspend fun restore(file: File): Result<Unit> = restoreInput { file.inputStream() }
+
+    private suspend fun restoreInput(openInput: () -> InputStream?): Result<Unit> =
         withContext(Dispatchers.IO) {
             var restoreStage = RestoreStage.READING_BACKUP
             val stagedDb = File(context.cacheDir, "restore-$BACKUP_DATABASE_ENTRY")
@@ -215,7 +246,7 @@ class BackupRestoreManager(
                     var manifest: BackupManifest? = null
                     var entryCount = 0
                     var extractedBytes = 0L
-                    context.contentResolver.openInputStream(uri)?.use { rawInput ->
+                    openInput()?.use { rawInput ->
                         ZipInputStream(rawInput.buffered()).use { zip ->
                             var entry = zip.nextEntry
                             while (entry != null) {

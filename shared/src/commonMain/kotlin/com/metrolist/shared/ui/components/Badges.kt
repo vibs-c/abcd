@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -21,10 +20,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.YTItem
 import com.metrolist.shared.model.isLive
 import com.metrolist.shared.state.SongLikeState
+import com.metrolist.shared.state.SongMetadataState
 import com.metrolist.shared.ui.icons.MetrolistIcons
 import com.metrolist.shared.ui.icons.SongStatusIcons
 import org.jetbrains.compose.resources.stringResource
@@ -94,17 +96,23 @@ fun LiveBadge(
     compact: Boolean = false,
     color: Color = MaterialTheme.colorScheme.error,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "LiveBadgePulse")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.35f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(durationMillis = 800, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "LiveDotAlpha",
-    )
+    val shown by LocalVisualWorkActive.current.collectAsState()
+    // The pulse clock exists only while the window shows content; a hidden badge draws a still dot.
+    val dotAlpha =
+        if (shown) {
+            rememberInfiniteTransition(label = "LiveBadgePulse").animateFloat(
+                initialValue = 1f,
+                targetValue = 0.35f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = 800, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "LiveDotAlpha",
+            )
+        } else {
+            null
+        }
 
     val dotSize = if (compact) 4.5.dp else 6.dp
     val spacing = if (compact) 3.dp else 4.dp
@@ -119,7 +127,8 @@ fun LiveBadge(
             modifier =
                 Modifier
                     .size(dotSize)
-                    .background(color.copy(alpha = dotAlpha), CircleShape),
+                    // Reading the alpha while drawing repaints only the dot, without recomposing the badge.
+                    .drawBehind { drawCircle(color.copy(alpha = dotAlpha?.value ?: 1f)) },
         )
         Text(
             text = stringResource(Res.string.live),
@@ -167,7 +176,8 @@ fun SongStatusBadges(
     showExplicit: Boolean = true,
 ) {
     val isLiked = SongLikeState.isLiked(song.id)
-    if (!isLiked && song.libraryRemoveToken == null && !isDownloaded && !(showExplicit && song.isExplicit) && !song.isNew &&
+    val isInLibrary = SongMetadataState.isInLibrary(song)
+    if (!isLiked && !isInLibrary && !isDownloaded && !(showExplicit && song.isExplicit) && !song.isNew &&
         !song.isLive
     ) {
         return
@@ -188,7 +198,7 @@ fun SongStatusBadges(
                 modifier = Modifier.offset(y = 1.dp).size(13.dp),
             )
         }
-        if (song.libraryRemoveToken != null) {
+        if (isInLibrary) {
             Icon(
                 imageVector = SongStatusIcons.Saved,
                 contentDescription = stringResource(Res.string.saved_to_library),

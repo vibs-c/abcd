@@ -1,6 +1,40 @@
 {
   "reflection": [
     {
+      "type": "com.metrolist.desktop.input.MacEventTapCallback",
+      "jniAccessible": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "com.metrolist.desktop.input.MacOsPhysicalKeyCapture$callback$1",
+      "jniAccessible": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": "com.metrolist.desktop.input.MacCoreGraphics",
+      "jniAccessible": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": {
+        "proxy": [
+          "com.metrolist.desktop.input.MacCoreGraphics"
+        ]
+      }
+    },
+    {
+      "type": "com.metrolist.desktop.input.MacCoreFoundation",
+      "jniAccessible": true,
+      "allDeclaredMethods": true
+    },
+    {
+      "type": {
+        "proxy": [
+          "com.metrolist.desktop.input.MacCoreFoundation"
+        ]
+      }
+    },
+    {
       "type": "com.metrolist.desktop.utils.NativeMemoryTrimmer$MacAllocator",
       "jniAccessible": true,
       "allDeclaredFields": true,
@@ -83,6 +117,67 @@
           ]
         }
       ]
+    },
+    {
+      "type": "sun.lwawt.macosx.CTrayIcon",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "handleMouseEvent",
+          "parameterTypes": [
+            "sun.lwawt.macosx.NSEvent"
+          ]
+        },
+        {
+          "name": "getPopupMenuModel",
+          "parameterTypes": []
+        }
+      ]
+    },
+    {
+      "type": "sun.lwawt.macosx.CMenuItem",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "handleAction",
+          "parameterTypes": [
+            "long",
+            "int"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.lwawt.macosx.CCheckboxMenuItem",
+      "jniAccessible": true,
+      "methods": [
+        {
+          "name": "handleAction",
+          "parameterTypes": [
+            "boolean"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sun.lwawt.macosx.CPopupMenu",
+      "jniAccessible": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": "com.sun.jna.platform.unix.LibC",
+      "jniAccessible": true,
+      "allDeclaredFields": true,
+      "allDeclaredMethods": true,
+      "allDeclaredConstructors": true
+    },
+    {
+      "type": {
+        "proxy": [
+          "com.sun.jna.platform.unix.LibC"
+        ]
+      }
     }
   ]
 }

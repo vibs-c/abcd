@@ -87,6 +87,7 @@ import com.metrolist.shared.model.toSongItem
 import com.metrolist.shared.playlist.LibraryDeletionTracker
 import com.metrolist.shared.playlist.PlaylistChanges
 import com.metrolist.shared.settings.BlockedContent
+import com.metrolist.shared.settings.Settings
 import com.metrolist.shared.state.SongLikeState
 import com.metrolist.shared.utils.Logger
 import com.metrolist.shared.viewmodels.LIBRARY_REFRESH_TTL_MILLIS
@@ -191,6 +192,7 @@ data class SongWatchInformation(
     val subscriberCount: String? = null,
     val likeCount: Long? = null,
     val viewCount: Long? = null,
+    val uploadDate: String? = null,
     val description: String? = null,
 )
 
@@ -626,7 +628,7 @@ class YouTubeRepository(
         val uploadedIds = uploadedSongs?.mapTo(mutableSetOf()) { it.id }
         return LibraryItemsResult(
             items = items.filterNot { it is SongItem && it.isUploaded && uploadedIds != null && it.id !in uploadedIds },
-            complete = results.all { it.getOrNull()?.complete == true } && unresolvedPlaylistEditabilityIds.isEmpty(),
+            complete = results.all { it.getOrNull()?.complete == true },
             unresolvedPlaylistEditabilityIds = unresolvedPlaylistEditabilityIds,
             uploadedSongs = uploadedSongs,
         )
@@ -957,6 +959,12 @@ class YouTubeRepository(
         applyContentFilters: Boolean = true,
     ): PlaylistPage {
         if (!initial.hasMore) return initial.also { rememberPlaylistMembership(it, applyContentFilters) }
+        // Mix continuations keep generating songs and never end, so the loaded pages are the whole mix.
+        val header = initial.sections["header"]?.filterIsInstance<PlaylistItem>()?.firstOrNull()
+        if (header?.id?.isMixPlaylistId() == true) {
+            requireCurrentSession(initial.session)
+            return initial.copy(pending = emptyList())
+        }
         val sections = linkedMapOf<String, MutableList<YTItem>>()
         var last = initial
         playlistPages(initial, applyContentFilters).collect { page ->
@@ -1411,7 +1419,6 @@ class YouTubeRepository(
                 return loadLocal()
             }
             val albumItem = albumHeader.item
-            val playlistId = albumItem.playlistId ?: return loadLocal()
 
             val secondaryContents =
                 response.contents
@@ -1425,7 +1432,28 @@ class YouTubeRepository(
 
             requireCurrentSession(requestSession)
             stage = "tracks"
-            val initialTracks = getPlaylistPlaybackPage(playlistId).copy(album = albumItem)
+            val playlistTracks =
+                if (albumId.startsWith("FEmusic_library_privately_owned_release")) {
+                    val parsed = parseBrowseResponse(response)
+                    PlaylistPage(
+                        sections =
+                            mapOf("Tracks" to response.uploadShelfObjects().flatMap { parseUploadedSongItems(it["contents"].asArray()) }),
+                        pending = parsed.continuationBranches.map { it.copy(sectionTitle = "Tracks") },
+                        seen = emptySet(),
+                        session = requestSession,
+                        album = albumItem,
+                    )
+                } else {
+                    getPlaylistPlaybackPage(albumItem.playlistId ?: return loadLocal()).copy(album = albumItem)
+                }
+            // An album's playlist comes back empty when the account cannot play most of it; the browse shelf still lists every track.
+            val shelfSongs =
+                if (playlistTracks.songs.isEmpty() && !playlistTracks.hasMore) secondaryContents.albumShelfSongs() else emptyList()
+            val initialTracks =
+                if (shelfSongs.isEmpty()) playlistTracks else playlistTracks.copy(sections = mapOf("songs" to shelfSongs))
+            if (initialTracks.songs.isEmpty() && !initialTracks.hasMore) {
+                loadLocal()?.let { return it }
+            }
             val tracks =
                 (
                     if (loadAllPages) {
@@ -1470,6 +1498,14 @@ class YouTubeRepository(
         )
     }
 
+    private fun JsonArray.albumShelfSongs(): List<SongItem> =
+        firstNotNullOfOrNull { it.jsonObject["musicShelfRenderer"] ?: it.jsonObject["musicPlaylistShelfRenderer"] }
+            ?.jsonObject
+            ?.get("contents")
+            ?.jsonArray
+            ?.mapNotNull { parseItem(it.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject) as? SongItem }
+            .orEmpty()
+
     suspend fun getAlbumVideoPage(albumId: String): AlbumPage? {
         return try {
             val response =
@@ -1490,21 +1526,7 @@ class YouTubeRepository(
                     ?.get("contents")
                     ?.jsonArray ?: JsonArray(emptyList())
 
-            val songsShelf =
-                secondaryContents
-                    .mapNotNull {
-                        it.jsonObject["musicShelfRenderer"]?.jsonObject
-                            ?: it.jsonObject["musicPlaylistShelfRenderer"]?.jsonObject
-                    }.firstOrNull() ?: return null
-
-            val directSongs = mutableListOf<SongItem>()
-            val shelfContents = songsShelf["contents"]?.jsonArray ?: emptyList()
-            shelfContents.forEach {
-                val item = parseItem(it.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject)
-                if (item is SongItem) {
-                    directSongs.add(item)
-                }
-            }
+            val directSongs = secondaryContents.albumShelfSongs()
             if (directSongs.isEmpty()) return null
 
             AlbumPage(
@@ -1752,6 +1774,15 @@ class YouTubeRepository(
                     ?.get("videoOwnerRenderer")
                     .asObject()
             val likeEntity = response.findFirstObject("likeCountEntity")
+            // WEB now sends an unset likeCountEntity; the exact count is only in the like button's accessibility text.
+            val likeButton =
+                response
+                    .findFirstObject("segmentedLikeDislikeButtonViewModel")
+                    ?.get("likeButtonViewModel")
+                    .asObject()
+                    ?.findFirstObject("defaultButtonViewModel")
+                    ?.get("buttonViewModel")
+                    .asObject()
             val viewEntity = response.findFirstObject("viewCountEntity")
 
             SongWatchInformation(
@@ -1771,10 +1802,17 @@ class YouTubeRepository(
                     likeEntity?.longValue("likeCountIfIndifferentNumber")
                         ?: likeEntity?.longValue("likeCountIfLikedNumber")
                         ?: likeEntity?.get("expandedLikeCountIfIndifferent").textContent().parseIntegerCount()
-                        ?: likeEntity?.get("expandedLikeCountIfLiked").textContent().parseIntegerCount(),
+                        ?: likeEntity?.get("expandedLikeCountIfLiked").textContent().parseIntegerCount()
+                        ?: likeButton?.get("accessibilityText").primitiveText().parseIntegerCount(),
                 viewCount =
                     viewEntity?.longValue("viewCountNumber")
                         ?: viewEntity?.get("unlabeledViewCountValue").textContent().parseIntegerCount(),
+                uploadDate =
+                    response
+                        .findFirstObject("videoPrimaryInfoRenderer")
+                        ?.get("dateText")
+                        .textContent()
+                        ?.takeIf { it.isNotBlank() },
                 description =
                     secondaryInfo
                         ?.get("attributedDescription")
@@ -2141,7 +2179,7 @@ class YouTubeRepository(
                             }
                     }
                 requireCurrentSession(requestSession)
-                return LibraryItemsResult(items, result.complete && unresolvedIds.isEmpty(), unresolvedIds).also(request::complete)
+                return LibraryItemsResult(items, result.complete, unresolvedIds).also(request::complete)
             } catch (error: Throwable) {
                 request.completeExceptionally(error)
                 throw error
@@ -2371,8 +2409,8 @@ class YouTubeRepository(
         playlistId: String? = null,
         params: String? = null,
         continuation: String? = null,
+        session: InnerTube.SessionSnapshot = innerTube.sessionSnapshot(),
     ): JsonObject {
-        val session = innerTube.sessionSnapshot()
         val voteRevision = SongLikeState.voteObservationRevision()
         val key = NextRequestKey(session, videoId, playlistId, params, continuation)
         while (true) {
@@ -2415,11 +2453,48 @@ class YouTubeRepository(
         }
     }
 
-    suspend fun startRadio(videoId: String): List<SongItem> = startRadioQueue(videoId).songs
+    suspend fun startRadio(videoId: String): List<SongItem> =
+        startRadioQueue(videoId, playlistId = if (Settings.shared.classicRecommendations) null else "RDAMVM$videoId").songs
 
     suspend fun startRadioQueue(
         videoId: String,
-        playlistId: String = "RDAMVM$videoId",
+        classic: Boolean = Settings.shared.classicRecommendations,
+    ): RadioQueuePage {
+        val mixPlaylistId = "RDAMVM$videoId"
+        if (!classic) return startRadioQueue(videoId, playlistId = mixPlaylistId)
+
+        val session = innerTube.sessionSnapshot()
+        val firstPage = parseRadioQueueResponse(nextResponse(videoId, session = session))
+        val page =
+            if (firstPage.continuation == null && firstPage.songs.isNotEmpty() && firstPage.songs.all { it.id == videoId }) {
+                currentCoroutineContext().ensureActive()
+                try {
+                    val fallback = parseRadioQueueResponse(nextResponse(videoId, playlistId = mixPlaylistId, session = session))
+                    when {
+                        fallback.continuation == null && fallback.songs.none { it.id != videoId } -> firstPage
+
+                        fallback.songs.any { it.id == videoId } -> fallback
+
+                        // Playback from a pasted link can fall back to the seed metadata.
+                        else -> fallback.copy(songs = listOf(firstPage.songs.first()) + fallback.songs)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    requireCurrentSession(session)
+                    YtLogger.w(TAG, "Classic radio fallback failed type=${error::class.simpleName}")
+                    firstPage
+                }
+            } else {
+                firstPage
+            }
+        requireCurrentSession(session)
+        return page.copy(songs = BlockedContent.filterSongs(page.songs))
+    }
+
+    suspend fun startRadioQueue(
+        videoId: String,
+        playlistId: String?,
         params: String? = null,
     ): RadioQueuePage {
         val page = parseRadioQueueResponse(nextResponse(videoId, playlistId, params))

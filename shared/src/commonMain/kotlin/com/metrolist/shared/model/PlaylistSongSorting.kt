@@ -8,6 +8,7 @@ enum class PlaylistSongSort {
     DURATION,
     YEAR,
     ORIGINAL,
+    LISTENING_TIME,
 }
 
 enum class SortDirection {
@@ -17,10 +18,17 @@ enum class SortDirection {
 
 fun PlaylistSongSort.allowsReordering(): Boolean = this == PlaylistSongSort.ORIGINAL
 
+fun PlaylistSongSort.isReordering(
+    locked: Boolean,
+    editable: Boolean,
+    hasMore: Boolean = false,
+): Boolean = !locked && editable && !hasMore && allowsReordering()
+
 fun List<SongItem>.sortedForPlaylist(
     sort: PlaylistSongSort,
     direction: SortDirection,
     dateAddedOrder: SortDirection = SortDirection.ASCENDING,
+    listeningTimes: Map<String, Long> = emptyMap(),
 ): List<SongItem> {
     if (sort == PlaylistSongSort.ORIGINAL) return this
     if (sort == PlaylistSongSort.DATE_ADDED) {
@@ -42,6 +50,7 @@ fun List<SongItem>.sortedForPlaylist(
         PlaylistSongSort.ALBUM -> sortedForPlaylistBy(direction) { it.album?.name?.lowercase() }
         PlaylistSongSort.DURATION -> sortedForPlaylistBy(direction) { it.duration }
         PlaylistSongSort.YEAR -> sortedForPlaylistBy(direction) { it.year }
+        PlaylistSongSort.LISTENING_TIME -> sortedForPlaylistBy(direction) { listeningTimes[it.id] ?: 0L }
         PlaylistSongSort.ORIGINAL, PlaylistSongSort.DATE_ADDED -> this
     }
 }
@@ -60,6 +69,7 @@ fun List<SongItem>.sortedForLikedPlaylist(
     sort: PlaylistSongSort,
     direction: SortDirection,
     recency: List<String> = emptyList(),
+    listeningTimes: Map<String, Long> = emptyMap(),
 ): List<SongItem> {
     val songs =
         if (sort == PlaylistSongSort.DATE_ADDED && recency.isNotEmpty()) {
@@ -68,7 +78,7 @@ fun List<SongItem>.sortedForLikedPlaylist(
         } else {
             this
         }
-    return songs.sortedForPlaylist(sort, direction, dateAddedOrder = SortDirection.DESCENDING)
+    return songs.sortedForPlaylist(sort, direction, dateAddedOrder = SortDirection.DESCENDING, listeningTimes = listeningTimes)
 }
 
 private fun <T : Comparable<T>> compareNullable(
@@ -187,13 +197,48 @@ fun YTItem.librarySearchKey(): String =
         is SongItem -> "song:$id"
     }
 
-fun SongItem.playlistOccurrenceKey(fallbackIndex: Int): String =
-    playlistSetVideoId ?: playlistLocalMappingId?.let { "local:$it" } ?: "$id@$fallbackIndex"
+fun SongItem.playlistOccurrenceIdentity(): String? =
+    playlistOccurrenceId ?: playlistSetVideoId?.let { "remote:$it" } ?: playlistLocalMappingId?.let { "local:$it" }
+
+fun List<SongItem>.preservePlaylistOccurrenceMappings(previousSongs: List<SongItem>): List<SongItem> {
+    val previousIndexBySetVideoId =
+        previousSongs.mapIndexedNotNull { index, song -> song.playlistSetVideoId?.let { it to index } }.toMap()
+    val matchedPreviousIndices = mutableSetOf<Int>()
+    val matches = mutableMapOf<Int, Int>()
+    forEachIndexed { index, song ->
+        val previousIndex = song.playlistSetVideoId?.let(previousIndexBySetVideoId::get)
+        if (previousIndex != null && matchedPreviousIndices.add(previousIndex)) matches[index] = previousIndex
+    }
+    val unmatchedCurrentIndices = indices.filterNot(matches::containsKey)
+    val unmatchedPreviousIndices = previousSongs.indices.filterNot(matchedPreviousIndices::contains)
+    if (unmatchedPreviousIndices.isNotEmpty()) {
+        val previousBySongId = unmatchedPreviousIndices.groupBy { previousSongs[it].id }
+        val currentBySongId = unmatchedCurrentIndices.groupBy { this[it].id }
+        for ((songId, current) in currentBySongId) {
+            val previous = previousBySongId[songId] ?: continue
+            if (current.size == previous.size) {
+                current.zip(previous).forEach { (currentIndex, previousIndex) ->
+                    val currentToken = this[currentIndex].playlistSetVideoId
+                    val previousToken = previousSongs[previousIndex].playlistSetVideoId
+                    if (currentToken == null || previousToken == null || currentToken == previousToken) {
+                        matches[currentIndex] = previousIndex
+                    }
+                }
+            }
+        }
+    }
+    return mapIndexed { index, song ->
+        val previous = matches[index]?.let(previousSongs::get)
+        song.copy(playlistOccurrenceId = song.playlistOccurrenceId ?: previous?.playlistOccurrenceIdentity())
+    }
+}
+
+fun SongItem.playlistOccurrenceKey(fallbackIndex: Int): String = playlistOccurrenceIdentity() ?: "$id@$fallbackIndex"
 
 fun List<SongItem>.playlistLazyItemKeys(): List<String> {
     val occurrences = mutableMapOf<String, Int>()
     return map { song ->
-        val identity = song.playlistSetVideoId ?: song.playlistLocalMappingId?.let { "local:$it" } ?: song.id
+        val identity = song.playlistOccurrenceIdentity() ?: song.id
         val occurrence = occurrences[identity] ?: 0
         occurrences[identity] = occurrence + 1
         "playlist_song:$identity@$occurrence"

@@ -218,6 +218,7 @@ private fun buildBraccatoStatics(
             val timeWhereStart = { v: Float -> sd * (v - SWIPE_START_FROM) / (SWIPE_START_TO - SWIPE_START_FROM) }
             out.begin[i] = timeWhereEnd(index.toFloat() / letters).coerceIn(0f, sd)
             out.finish[i] = timeWhereStart((index + 1f) / letters).coerceIn(0f, sd)
+            out.lineEndMs = max(out.lineEndMs, (startMs + braccatoSwipeCompletionElapsedMs(animationDur)).toLong())
         }
 
         if (kind == KIND_LETTER) {
@@ -277,6 +278,14 @@ private fun buildBraccatoStatics(
     return out
 }
 
+internal fun braccatoSwipeCompletionElapsedMs(animationDurMs: Float): Float {
+    val swipeDur = animationDurMs * SWIPE_DURATION_RATIO
+    if (swipeDur <= 0f) return 0f
+    val lead = animationDurMs * SWIPE_LEAD_RATIO
+    val finish = (swipeDur * (1f - SWIPE_START_FROM) / (SWIPE_START_TO - SWIPE_START_FROM)).coerceIn(0f, swipeDur)
+    return max(0f, finish - lead)
+}
+
 private fun braccatoEdge(
     b: BraccatoStatics,
     i: Int,
@@ -304,7 +313,10 @@ private fun braccatoCoverage(
     return area.coerceIn(0f, 1f)
 }
 
-internal fun braccatoExitOpacity(elapsedMs: Float): Float = 1f - BraccatoEase.transform((elapsedMs / FADE_OUT_MS).coerceIn(0f, 1f))
+internal fun braccatoExitOpacity(
+    elapsedMs: Float,
+    completionMs: Float = 0f,
+): Float = 1f - BraccatoEase.transform(((elapsedMs - completionMs) / FADE_OUT_MS).coerceIn(0f, 1f))
 
 private class BraccatoRuntime {
     var hadActive = false
@@ -355,7 +367,8 @@ internal fun BraccatoWordAnimation(
             }
             return@LaunchedEffect
         }
-        animateLyricsFrames(animationVisibility) { frameWallTimeMs = it }
+        // The position is snapshot state, so a paused line still redraws when it moves; wall-clock frames would only idle.
+        if (isPlaying) animateLyricsFrames(animationVisibility) { frameWallTimeMs = it }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -617,8 +630,8 @@ internal fun BraccatoWordAnimation(
                     val finishMs = if (needsFinish) FINISH_MS else 0f
                     val fxRemainingMs = if (started) max(0f, (bst.fxEndMs - exitPos) / speed) else 0f
                     val holdMs = max(finishMs, fxRemainingMs)
-                    fadeOpacity = braccatoExitOpacity(elapsed)
-                    if (elapsed >= max(holdMs, FADE_OUT_MS)) {
+                    fadeOpacity = braccatoExitOpacity(elapsed, finishMs)
+                    if (elapsed >= max(holdMs, finishMs + FADE_OUT_MS)) {
                         runtime.hadActive = false
                     } else if (elapsed < holdMs) {
                         mode = 1

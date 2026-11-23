@@ -2,6 +2,17 @@
 
 All notable changes to abcd. Versions follow [semantic versioning](https://semver.org/).
 
+## 2.0.0-alpha1 · 2026-11-23
+
+The start of the v2 line: abcd is synced with the latest upstream music app (version 14.0.1, 855 changes), so it
+gets its playback, download, library and YouTube fixes. No new DJ features yet; v2's features are planned in
+[`docs/V2_PLAN.md`](docs/V2_PLAN.md).
+
+### Changed
+- Synced with upstream 14.0.1: many playback, download, library, Android Auto and import fixes.
+- Everything abcd changed is kept: the DJ, the abcd name in every language, no crash reporting, no update
+  checks against upstream, and abcd's own GitHub files.
+
 ## 1.0.0-alpha2 · 2026-11-23
 
 ### Fixed

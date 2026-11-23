@@ -97,9 +97,12 @@ data class HistorySyncRow(
 
 internal class HistorySyncIndex(
     rows: List<HistorySyncRow>,
+    incomingTokens: Set<String> = emptySet(),
 ) {
     private val tokens = mutableMapOf<String, HistorySyncRow>()
     private val days = mutableMapOf<Pair<String, LocalDate>, MutableMap<Long, HistorySyncRow>>()
+    private val matchedIds = mutableSetOf<Long>()
+    private val reservedIds = rows.filter { it.remoteFeedbackToken in incomingTokens }.mapTo(hashSetOf()) { it.id }
 
     init {
         rows.forEach(::add)
@@ -107,10 +110,22 @@ internal class HistorySyncIndex(
 
     fun find(token: String?): HistorySyncRow? = token?.takeIf(String::isNotBlank)?.let(tokens::get)
 
-    fun findDay(
+    fun match(
+        token: String?,
         songId: String,
         playedAt: Long,
-    ): HistorySyncRow? = days[songId to playedAt.historyDay()]?.values?.firstOrNull()
+        remoteOrder: Int,
+    ): HistorySyncRow? {
+        val exact = find(token)
+        val candidates = days[songId to playedAt.historyDay()]?.values.orEmpty().filter { it.id !in matchedIds && it.id !in reservedIds }
+        return (exact ?: candidates.firstOrNull { it.remoteOrder == remoteOrder } ?: candidates.firstOrNull())
+            ?.also { matchedIds.add(it.id) }
+    }
+
+    fun markInserted(row: HistorySyncRow) {
+        add(row)
+        matchedIds.add(row.id)
+    }
 
     fun add(row: HistorySyncRow) {
         row.remoteFeedbackToken?.takeIf(String::isNotBlank)?.let { token ->
@@ -128,7 +143,9 @@ internal class HistorySyncIndex(
         date: RemoteHistoryDate,
         remoteOrder: Int,
         accountKey: String?,
+        token: String?,
     ) {
+        row.remoteFeedbackToken?.let(tokens::remove)
         if (row.source == "YOUTUBE") {
             val key = row.songId to row.playedAt.historyDay()
             val matches = days.getValue(key)
@@ -143,6 +160,7 @@ internal class HistorySyncIndex(
                 remoteAccountKey = accountKey,
                 remoteDateLabel = date.label,
                 remoteOrder = remoteOrder,
+                remoteFeedbackToken = token,
             ),
         )
     }
@@ -203,7 +221,12 @@ internal suspend fun MusicDatabase.historySyncIndex(
                 )
             }
         }
-    return HistorySyncIndex(rows.values.sortedWith(compareByDescending<HistorySyncRow> { it.playedAt }.thenByDescending { it.id }))
+    return HistorySyncIndex(
+        rows.values.sortedWith(
+            compareByDescending<HistorySyncRow> { it.playedAt }.thenByDescending { it.remoteOrder }.thenByDescending { it.id },
+        ),
+        entries.mapNotNull { it.first.feedbackToken?.takeIf(String::isNotBlank) }.toSet(),
+    )
 }
 
 internal expect fun parseYouTubeHistoryDate(
@@ -212,23 +235,39 @@ internal expect fun parseYouTubeHistoryDate(
     language: String,
 ): RemoteHistoryDate?
 
+enum class HistorySyncOutcome {
+    SKIPPED,
+    UNCHANGED,
+    UPDATED,
+    FAILED,
+}
+
 suspend fun MusicDatabase.syncYouTubeHistory(
     parseDate: (String, Long, String) -> RemoteHistoryDate? = ::parseYouTubeHistoryDate,
 ): Boolean = syncYouTubeHistory(GlobalYouTubeRepository.instance, parseDate)
 
+suspend fun MusicDatabase.refreshYouTubeHistory(
+    parseDate: (String, Long, String) -> RemoteHistoryDate? = ::parseYouTubeHistoryDate,
+): HistorySyncOutcome = refreshYouTubeHistory(GlobalYouTubeRepository.instance, parseDate)
+
 internal suspend fun MusicDatabase.syncYouTubeHistory(
     repository: YouTubeRepository,
     parseDate: (String, Long, String) -> RemoteHistoryDate? = ::parseYouTubeHistoryDate,
-): Boolean =
+): Boolean = refreshYouTubeHistory(repository, parseDate) == HistorySyncOutcome.UPDATED
+
+private suspend fun MusicDatabase.refreshYouTubeHistory(
+    repository: YouTubeRepository,
+    parseDate: (String, Long, String) -> RemoteHistoryDate?,
+): HistorySyncOutcome =
     historySyncMutex.withLock {
-        if (!repository.isHistorySyncEnabled()) return@withLock false
+        if (!repository.isHistorySyncEnabled()) return@withLock HistorySyncOutcome.SKIPPED
         val session = repository.playbackTrackingSession()
-        val accountKey = repository.playbackReportingAccountKey(session) ?: return@withLock false
+        val accountKey = repository.playbackReportingAccountKey(session) ?: return@withLock HistorySyncOutcome.SKIPPED
         val now = Clock.System.now().toEpochMilliseconds()
         if (lastHistorySyncDatabase === this && lastHistorySyncSession?.snapshot == session.snapshot &&
             now - lastHistorySyncMs < 5 * 60_000L
         ) {
-            return@withLock false
+            return@withLock HistorySyncOutcome.SKIPPED
         }
 
         fun requireCurrentAccount() {
@@ -238,6 +277,8 @@ internal suspend fun MusicDatabase.syncYouTubeHistory(
         }
         val result = repository.getHistoryResult()
         requireCurrentAccount()
+        // Unseen occurrences on a failed continuation can still own the tokens or bucket matches.
+        if (!result.complete) return@withLock HistorySyncOutcome.FAILED
         val dates = mutableMapOf<String, RemoteHistoryDate?>()
         val entries =
             result.entries.map { entry ->
@@ -259,7 +300,7 @@ internal suspend fun MusicDatabase.syncYouTubeHistory(
             lastHistorySyncSession = session
             lastHistorySyncDatabase = this
         }
-        changed
+        if (changed) HistorySyncOutcome.UPDATED else HistorySyncOutcome.UNCHANGED
     }
 
 internal suspend fun MusicDatabase.applyYouTubeHistoryEntry(
@@ -271,18 +312,29 @@ internal suspend fun MusicDatabase.applyYouTubeHistoryEntry(
 ): Boolean {
     if (entry.song.id.isBlank() || date == null || date.startMs <= 0L) return false
     val rows = known ?: historySyncIndex(listOf(entry to date), accountKey)
-    val existing =
-        rows.find(entry.feedbackToken)
-            ?: if (entry.feedbackToken.isNullOrBlank()) rows.findDay(entry.song.id, date.startMs) else null
+    val token = entry.feedbackToken?.takeIf(String::isNotBlank)
+    val existing = rows.match(token, entry.song.id, date.startMs, remoteOrder)
     if (existing != null) {
         if (existing.source != "YOUTUBE") return false
+        val refreshedToken = token ?: existing.remoteFeedbackToken
+        if (token != null && token != existing.remoteFeedbackToken &&
+            (
+                dao().eventIdForToken(token)?.let { it != existing.id } == true ||
+                    dao().snapshotEventIdForToken(token)?.let { it != existing.id } == true
+            )
+        ) {
+            return false
+        }
         if (existing.playedAt == date.startMs && existing.remoteDateLabel == date.label &&
-            existing.remoteOrder == remoteOrder && existing.remoteSynced && existing.remoteAccountKey == accountKey
+            existing.remoteOrder == remoteOrder && existing.remoteSynced && existing.remoteAccountKey == accountKey &&
+            existing.remoteFeedbackToken == refreshedToken
         ) {
             return false
         }
         dao().updateHistoryTimestamp(existing.id, date.startMs.historyTimestamp(), date.label, remoteOrder, accountKey)
-        rows.update(existing, date, remoteOrder, accountKey)
+        dao().updateHistoryEventToken(existing.id, refreshedToken)
+        dao().updateHistorySnapshotToken(existing.id, refreshedToken)
+        rows.update(existing, date, remoteOrder, accountKey, refreshedToken)
         return true
     }
     val id =
@@ -290,14 +342,14 @@ internal suspend fun MusicDatabase.applyYouTubeHistoryEntry(
             entry.song,
             date.startMs,
             "YOUTUBE",
-            entry.feedbackToken?.takeIf(String::isNotBlank),
+            token,
             remoteSynced = true,
             remoteDateLabel = date.label,
             remoteOrder = remoteOrder,
             remoteAccountKey = accountKey,
         ) ?: return false
-    rows.add(
-        HistorySyncRow(id, entry.song.id, date.startMs, "YOUTUBE", entry.feedbackToken, null, true, accountKey, date.label, remoteOrder),
+    rows.markInserted(
+        HistorySyncRow(id, entry.song.id, date.startMs, "YOUTUBE", token, null, true, accountKey, date.label, remoteOrder),
     )
     return true
 }

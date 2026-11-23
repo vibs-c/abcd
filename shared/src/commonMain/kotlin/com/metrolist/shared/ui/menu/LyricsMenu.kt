@@ -39,6 +39,7 @@ import com.metrolist.shared.generated.resources.copy
 import com.metrolist.shared.generated.resources.edit
 import com.metrolist.shared.generated.resources.edit_lyrics
 import com.metrolist.shared.generated.resources.lyrics_offset
+import com.metrolist.shared.generated.resources.lyrics_romanization_show_original
 import com.metrolist.shared.generated.resources.lyrics_romanize_title
 import com.metrolist.shared.generated.resources.lyrics_show_translations
 import com.metrolist.shared.generated.resources.no_provider_results_found
@@ -46,6 +47,7 @@ import com.metrolist.shared.generated.resources.offset_ms
 import com.metrolist.shared.generated.resources.refetch
 import com.metrolist.shared.generated.resources.save
 import com.metrolist.shared.generated.resources.sources
+import com.metrolist.shared.model.LyricsProvider
 import com.metrolist.shared.model.LyricsProviderResult
 import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.previewAspectRatio
@@ -75,7 +77,7 @@ fun LyricsMenu(
     lyricsUiState: LyricsUiState,
     onDismiss: () -> Unit,
     onRefetch: (customTitle: String?, customArtist: String?) -> Unit,
-    onLoadProviders: (customTitle: String?, customArtist: String?) -> Unit,
+    onLoadProviders: (customTitle: String?, customArtist: String?, provider: LyricsProvider?) -> Unit,
     onSelectProvider: (LyricsProviderResult) -> Unit,
     onShowLyricsOffset: () -> Unit,
     onLyricsChanged: () -> Unit,
@@ -86,15 +88,23 @@ fun LyricsMenu(
 
     var editorSong by remember { mutableStateOf(song.id to song.title) }
     var showEditDialog by remember { mutableStateOf(false) }
-    var showProviderDialog by remember { mutableStateOf(false) }
-    var showSearchDialog by remember { mutableStateOf(false) }
+    var showProviderDialog by remember(song.id) { mutableStateOf(false) }
+    var showSearchDialog by remember(song.id) { mutableStateOf(false) }
+    var showRefreshMenu by remember(song.id) { mutableStateOf(false) }
+    var providerDialogFromRefetch by remember(song.id) { mutableStateOf(false) }
 
     val queryTitle = lyricsUiState.queryTitle ?: song.title
     val queryArtist = lyricsUiState.queryArtist ?: song.artists.joinToString { it.name }
     var editText by remember(lyricsUiState.rawLyrics) { mutableStateOf(TextFieldValue(lyricsUiState.rawLyrics.orEmpty())) }
     val snackbarHostState = remember { SnackbarHostState() }
     val copiedMessage = stringResource(Res.string.copied)
-    var romanizationEnabled by remember { mutableStateOf(Settings.shared.lyricsRomanizationEnabled) }
+    val romanizeAsMain = Settings.shared.isLyricsRomanizationActive && Settings.shared.lyricsRomanizeAsMain
+    val toggleChecked =
+        if (romanizeAsMain) {
+            Settings.shared.lyricsShowOriginalLyrics
+        } else {
+            Settings.shared.lyricsRomanizationEnabled
+        }
     var manualAiTranslationChecked by remember(lyricsUiState.manualAiTranslationEnabled) {
         mutableStateOf(lyricsUiState.manualAiTranslationEnabled)
     }
@@ -118,8 +128,24 @@ fun LyricsMenu(
             initialArtist = queryArtist,
             onDismiss = { showSearchDialog = false },
             onSearch = { title, artist ->
-                onLoadProviders(title, artist)
+                onLoadProviders(title, artist, null)
                 showSearchDialog = false
+                providerDialogFromRefetch = false
+                showProviderDialog = true
+            },
+        )
+    }
+
+    PopupVisibility(visible = showRefreshMenu) {
+        LyricsRefreshDialog(
+            onDismiss = { showRefreshMenu = false },
+            onAutomatic = {
+                onRefetch(queryTitle, queryArtist)
+                onDismiss()
+            },
+            onProvider = { provider ->
+                onLoadProviders(queryTitle, queryArtist, provider)
+                providerDialogFromRefetch = true
                 showProviderDialog = true
             },
         )
@@ -129,9 +155,16 @@ fun LyricsMenu(
         LyricsProviderDialog(
             search = lyricsUiState.providerSearch,
             noResultsText = stringResource(Res.string.no_provider_results_found),
-            onDismiss = { showProviderDialog = false },
+            onDismiss = {
+                showProviderDialog = false
+                if (providerDialogFromRefetch) {
+                    providerDialogFromRefetch = false
+                    showRefreshMenu = true
+                }
+            },
             onSelect = { result ->
                 onSelectProvider(result)
+                providerDialogFromRefetch = false
                 showProviderDialog = false
                 onDismiss()
             },
@@ -172,10 +205,7 @@ fun LyricsMenu(
                         PlayerMenuAction(
                             icon = MetrolistIcons.Outlined.Cached,
                             title = stringResource(Res.string.refetch),
-                            onClick = {
-                                onRefetch(queryTitle, queryArtist)
-                                onDismiss()
-                            },
+                            onClick = { showRefreshMenu = true },
                         ),
                         PlayerMenuAction(
                             icon = MetrolistIcons.Outlined.Search,
@@ -242,7 +272,17 @@ fun LyricsMenu(
                             null
                         },
                         Material3MenuItemData(
-                            title = { Text(stringResource(Res.string.lyrics_romanize_title)) },
+                            title = {
+                                Text(
+                                    stringResource(
+                                        if (romanizeAsMain) {
+                                            Res.string.lyrics_romanization_show_original
+                                        } else {
+                                            Res.string.lyrics_romanize_title
+                                        },
+                                    ),
+                                )
+                            },
                             icon = {
                                 Icon(
                                     imageVector = MetrolistIcons.Outlined.Translate,
@@ -250,15 +290,21 @@ fun LyricsMenu(
                                 )
                             },
                             onClick = {
-                                romanizationEnabled = !romanizationEnabled
-                                Settings.shared.lyricsRomanizationEnabled = romanizationEnabled
+                                if (romanizeAsMain) {
+                                    Settings.shared.lyricsShowOriginalLyrics = !toggleChecked
+                                } else {
+                                    Settings.shared.lyricsRomanizationEnabled = !toggleChecked
+                                }
                             },
                             trailingContent = {
                                 ExpressiveSwitch(
-                                    checked = romanizationEnabled,
+                                    checked = toggleChecked,
                                     onCheckedChange = {
-                                        romanizationEnabled = it
-                                        Settings.shared.lyricsRomanizationEnabled = it
+                                        if (romanizeAsMain) {
+                                            Settings.shared.lyricsShowOriginalLyrics = it
+                                        } else {
+                                            Settings.shared.lyricsRomanizationEnabled = it
+                                        }
                                     },
                                 )
                             },

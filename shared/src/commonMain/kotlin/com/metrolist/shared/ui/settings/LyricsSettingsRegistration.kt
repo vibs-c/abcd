@@ -353,7 +353,6 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
                         if (selected.id != "OpenRouter") settings.lyricsOpenRouterOAuthSession = ""
                         if (selected.endpoint.isNotBlank()) settings.lyricsAiBaseUrl = selected.endpoint
                         settings.lyricsAiModel = selected.defaultModel
-                        settings.lyricsAiDetectorModel = ""
                         if (isDirectLyricsTranslationProvider(selected.id)) settings.lyricsAiTranslationMode = "Literal"
                         onSettingValueChanged()
                     }
@@ -374,13 +373,23 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
                             if (oauthConnected) {
                                 stringResource(Res.string.ai_openrouter_oauth_active)
                             } else {
-                                stringResource(if (apiKey.isBlank()) Res.string.required else Res.string.configured)
+                                stringResource(
+                                    when {
+                                        apiKey.isNotBlank() -> Res.string.configured
+                                        preset.keyless -> Res.string.ai_api_key_optional
+                                        else -> Res.string.required
+                                    },
+                                )
                             },
                         value = apiKey,
                         enabled = !oauthConnected,
                         secret = true,
                     ) {
-                        if (provider == "DeepL") settings.lyricsDeepLApiKey = it else settings.setLyricsAiApiKey(provider, it)
+                        if (provider == "DeepL") {
+                            settings.lyricsDeepLApiKey = it
+                        } else {
+                            settings.setLyricsAiApiKey(provider, it)
+                        }
                     }
                     if (preset.editableEndpoint) {
                         text(
@@ -405,8 +414,9 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
             }
             if (preset.isAi && !directProvider) {
                 val apiKey = settings.lyricsAiApiKeyFor(provider)
-                val modelsReady = oauthConnected || apiKey.isNotBlank() || preset.publicModelList
+                val modelsReady = oauthConnected || apiKey.isNotBlank() || preset.publicModelList || preset.keyless
                 val (modelKey, modelUrl) = settings.lyricsAiCredentials(provider)
+                val freeOnly = preset.keyless && modelKey.isBlank()
                 group("models", stringResource(Res.string.ai_models)) {
                     custom(
                         id = "translationModel",
@@ -422,27 +432,9 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
                             apiKey = modelKey,
                             baseUrl = modelUrl,
                             allowBlank = false,
+                            freeOnly = freeOnly,
                             enabled = modelsReady,
                         ) { settings.lyricsAiModel = it }
-                    }
-                    if (settings.lyricsAiActivationMode == "Automatic") {
-                        custom(
-                            id = "detectorModel",
-                            title = stringResource(Res.string.ai_judge_detector_model),
-                            enabled = modelsReady,
-                            description = stringResource(Res.string.settings_detector_model_summary),
-                        ) {
-                            AiModelPicker(
-                                title = stringResource(Res.string.ai_judge_detector_model),
-                                description = stringResource(Res.string.settings_detector_model_summary),
-                                preset = preset,
-                                model = settings.lyricsAiDetectorModel,
-                                apiKey = modelKey,
-                                baseUrl = modelUrl,
-                                allowBlank = true,
-                                enabled = modelsReady,
-                            ) { settings.lyricsAiDetectorModel = it }
-                        }
                     }
                 }
             }
@@ -461,7 +453,12 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
                     value = settings.lyricsAiSystemPrompt,
                     enabled =
                         preset.isAi && !directProvider &&
-                            (oauthConnected || settings.lyricsAiApiKeyFor(provider).isNotBlank() || preset.publicModelList),
+                            (
+                                oauthConnected ||
+                                    settings.lyricsAiApiKeyFor(provider).isNotBlank() ||
+                                    preset.publicModelList ||
+                                    preset.keyless
+                            ),
                     multiline = true,
                 ) { settings.lyricsAiSystemPrompt = it }
             }
@@ -485,18 +482,42 @@ internal fun SettingsUiRegistryBuilder.registerLyricsSettings(host: SharedSettin
             tone = SettingsTone.ROSE,
         ) {
             group("display", stringResource(Res.string.lyrics_romanization_display)) {
-                switch(
-                    id = "romanizationEnabled",
-                    title = stringResource(Res.string.lyrics_romanization_enable),
-                    description = stringResource(Res.string.lyrics_romanization_enable_description),
-                    checked = settings.lyricsRomanizationEnabled,
-                ) { settings.lyricsRomanizationEnabled = it }
-                switch(
-                    id = "romanizeAsMain",
-                    title = stringResource(Res.string.lyrics_romanize_as_main),
-                    description = stringResource(Res.string.lyrics_romanization_as_main_description),
-                    checked = settings.lyricsRomanizeAsMain,
-                ) { settings.lyricsRomanizeAsMain = it }
+                val largerTextChoices =
+                    listOf(
+                        SettingsChoice("lyrics", stringResource(Res.string.lyrics)),
+                        SettingsChoice("romanization", stringResource(Res.string.lyrics_romanize_title)),
+                    )
+                val romanizeAsMain = settings.isLyricsRomanizationActive && settings.lyricsRomanizeAsMain
+                val largerTextChoiceId = if (romanizeAsMain) "romanization" else "lyrics"
+                choice(
+                    id = "romanizationLargerText",
+                    title = stringResource(Res.string.lyrics_romanization_larger_text),
+                    description = stringResource(Res.string.lyrics_romanization_larger_text_description),
+                    valueLabel = largerTextChoices.first { it.id == largerTextChoiceId }.label,
+                    choices = largerTextChoices,
+                    selectedChoiceId = largerTextChoiceId,
+                ) { selected ->
+                    val useRomanization = selected == "romanization"
+                    settings.lyricsRomanizeAsMain = useRomanization
+                    if (useRomanization) {
+                        settings.lyricsRomanizationEnabled = true
+                    }
+                }
+                if (romanizeAsMain) {
+                    switch(
+                        id = "showSecondaryLyrics",
+                        title = stringResource(Res.string.lyrics_romanization_show_original),
+                        description = stringResource(Res.string.lyrics_romanization_show_original_description),
+                        checked = settings.lyricsShowOriginalLyrics,
+                    ) { settings.lyricsShowOriginalLyrics = it }
+                } else {
+                    switch(
+                        id = "showSecondaryLyrics",
+                        title = stringResource(Res.string.lyrics_romanization_show_romanization),
+                        description = stringResource(Res.string.lyrics_romanization_show_romanization_description),
+                        checked = settings.lyricsRomanizationEnabled,
+                    ) { settings.lyricsRomanizationEnabled = it }
+                }
                 switch(
                     id = "syllableRomanization",
                     title = stringResource(Res.string.lyrics_romanization_syllable_title),

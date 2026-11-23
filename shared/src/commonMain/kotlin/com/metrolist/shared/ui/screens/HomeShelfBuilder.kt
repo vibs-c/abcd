@@ -26,21 +26,34 @@ object HomeShelfBuilder {
         fun isVisible(
             key: String,
             title: String,
-        ) = includeHidden || Settings.shared.shouldShowHomeSection(key, title)
+            legacyKey: String? = null,
+        ) = includeHidden || Settings.shared.shouldShowHomeSection(key, title, legacyKey)
         val sourceSections = state.data.orEmpty().ifEmpty { state.sections }
 
         fun sourceFor(shelf: HomeShelf): HomeSection? {
+            if (shelf.style == HomeShelfStyle.SPEED_DIAL) return null
+            val itemIds = shelf.items.mapTo(mutableSetOf(), ::canonicalHomeItemId)
+            if (shelf.key == "quick_picks") {
+                val candidates =
+                    sourceSections.filter { section ->
+                        section.hasTitle &&
+                            (section.browseId?.startsWith("FEmusic_quickpicks") == true || section.title == shelf.title) &&
+                            section.items.mapTo(mutableSetOf(), ::canonicalHomeItemId).containsAll(itemIds)
+                    }
+                return candidates.firstOrNull { it.title == shelf.title } ?: candidates.firstOrNull()
+            }
             state.sections
                 .singleOrNull { section ->
                     section.hasTitle && section.title == shelf.title && section.browseId == shelf.browseId &&
                         section.params == shelf.params && section.subtitle == shelf.label && section.items.containsAll(shelf.items)
                 }?.let { return it }
-            val itemIds = shelf.items.mapTo(mutableSetOf(), ::canonicalHomeItemId)
             val candidates =
                 sourceSections.filter { section ->
                     section.hasTitle && section.items.any { canonicalHomeItemId(it) in itemIds }
                 }
-            return candidates.singleOrNull { it.browseId == shelf.browseId && (shelf.params == null || it.params == shelf.params) }
+            return candidates.singleOrNull {
+                shelf.browseId != null && it.browseId == shelf.browseId && (shelf.params == null || it.params == shelf.params)
+            }
                 ?: candidates.singleOrNull {
                     it.title == shelf.title && (shelf.label == null || it.subtitle == shelf.label) &&
                         (shelf.params == null || it.params == shelf.params)
@@ -52,12 +65,37 @@ object HomeShelfBuilder {
 
             val userPlaylistIds = state.userPlaylists.map { it.id.removePrefix("VL") }.toSet()
             if (isVisible("speed_dial", text.speedDial)) {
+                // Speed Dial recommendations are drawn from the other shelves, so hiding a shelf must hide its items here too.
+                val hiddenItemIds =
+                    if (includeHidden) {
+                        emptySet()
+                    } else {
+                        buildSet {
+                            (state.data.orEmpty() + state.sections)
+                                .filter { it.hasTitle && !isVisible(it.visibilityKey, it.title, it.legacyVisibilityKey) }
+                                .forEach { section -> section.items.mapTo(this, ::canonicalHomeItemId) }
+                            listOf(
+                                Triple("keep_listening", text.keepListening, state.keepListening),
+                                Triple("quick_picks", text.quickPicks, state.quickPicks),
+                                Triple("forgotten_favorites", text.forgottenFavorites, state.forgottenFavorites),
+                                Triple("new_releases", text.newReleases, state.newReleases),
+                                Triple("trending", text.charts, state.trending),
+                                Triple("album_charts", text.albumCharts, state.albumCharts),
+                                Triple("community_playlists", text.editorialPlaylists, state.communityPlaylist),
+                            ).filterNot { (key, title, _) -> isVisible(key, title) }
+                                .forEach { (_, _, items) -> items.mapTo(this, ::canonicalHomeItemId) }
+                        }
+                    }
                 val uniqueSpeedDial =
                     state.speedDialItems
                         .distinctBy(::canonicalHomeItemId)
                         .filter { item ->
                             val isPinned = item.id in state.speedDialPinnedIds
-                            isPinned || !(item is PlaylistItem && (item.isEditable || canonicalHomeItemId(item) in userPlaylistIds))
+                            isPinned ||
+                                (
+                                    !(item is PlaylistItem && (item.isEditable || canonicalHomeItemId(item) in userPlaylistIds)) &&
+                                        canonicalHomeItemId(item) !in hiddenItemIds
+                                )
                         }
                 if (uniqueSpeedDial.isNotEmpty()) {
                     text.speedDial
@@ -121,7 +159,6 @@ object HomeShelfBuilder {
                             style = HomeShelfStyle.SONG_GRID,
                             headerAction = HomeShelfHeaderAction.PLAY_ALL,
                             rows = 4,
-                            browseId = "FEmusic_quickpicks",
                         ),
                     )
                 }
@@ -292,8 +329,10 @@ object HomeShelfBuilder {
             }
 
             state.sections
-                .filter { it.hasTitle && it.browseId?.startsWith("FEmusic_listen_again") != true && isVisible(it.visibilityKey, it.title) }
-                .forEachIndexed { index, section ->
+                .filter {
+                    it.hasTitle && it.browseId?.startsWith("FEmusic_listen_again") != true &&
+                        isVisible(it.visibilityKey, it.title, it.legacyVisibilityKey)
+                }.forEachIndexed { index, section ->
                     val sectionTitleKey = section.title.trim().lowercase()
                     run {
                         val uniqueItems =
@@ -392,10 +431,10 @@ object HomeShelfBuilder {
                 } ?: sourceSections.size
             }
         }.filterRenderable(pageWidth)
-            .filter { isVisible(it.visibilityKey, it.title) } +
+            .filter { isVisible(it.visibilityKey, it.title, it.legacyVisibilityKey) } +
             state.chipFeeds.flatMapIndexed { feedIndex, feed ->
                 feed.sections
-                    .filter { it.items.isNotEmpty() && isVisible(it.visibilityKey, it.title) }
+                    .filter { it.items.isNotEmpty() && isVisible(it.visibilityKey, it.title, it.legacyVisibilityKey) }
                     .mapIndexed { index, section ->
                         val shelf =
                             section.toHomeShelf(
@@ -462,7 +501,12 @@ class HomeShelfCache {
     }
 }
 
+// Title instead of params: YouTube rotates params between loads, while shelves sharing a browse ID differ by title.
 private val HomeSection.visibilityKey: String
+    get() = "section:${browseId ?: headerBrowseId ?: title}:$title"
+
+// Key format before #5195, still read so sections hidden under it stay hidden.
+private val HomeSection.legacyVisibilityKey: String
     get() = "section:${browseId ?: headerBrowseId ?: title}:${params.orEmpty()}"
 
 private fun HomeSection.toHomeShelf(
@@ -480,6 +524,7 @@ private fun HomeSection.toHomeShelf(
     return HomeShelf(
         key = key,
         visibilityKey = section.visibilityKey,
+        legacyVisibilityKey = section.legacyVisibilityKey,
         title = section.title,
         items = items,
         style =

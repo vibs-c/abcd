@@ -108,6 +108,7 @@ import com.metrolist.shared.ui.screens.HomeShelf
 import com.metrolist.shared.ui.screens.homeContentText
 import com.metrolist.shared.ui.tv.RequestTvFocus
 import com.metrolist.shared.ui.tv.tvFocusHighlight
+import com.metrolist.shared.ui.wrapped.WrappedHomeCard
 import com.metrolist.shared.youtube.playback.PlaybackNetworkStateStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -129,6 +130,7 @@ fun HomeScreen(
     onNavigateToPlaylist: (String, String?) -> Unit = { _, _ -> },
     onNavigateToPodcast: (String) -> Unit = {},
     onNavigateToRecognition: () -> Unit = {},
+    onNavigateToWrapped: () -> Unit = {},
     onNavigateToBrowse: (String, String?, String) -> Unit = { _, _, _ -> },
     onNavigateToVideoBrowse: (String, String?, String) -> Unit = onNavigateToBrowse,
     onNavigateToHomeSection: (HomeShelf) -> Unit = {},
@@ -229,6 +231,19 @@ fun HomeScreen(
 
     val homeContent: @Composable () -> Unit = {
         val sharedText = homeContentText()
+        val onHomeItemClick: (YTItem) -> Unit = { item ->
+            handleItemClick(
+                item,
+                onNavigateToAlbum,
+                onNavigateToArtist,
+                onNavigateToPlaylist,
+                onNavigateToPodcast,
+                playerConnection,
+                scope,
+                onNavigateToBrowse,
+                startVideo = false,
+            )
+        }
         HomeContent(
             uiState = uiState,
             shelfCache = viewModel.shared.shelfCache,
@@ -241,18 +256,13 @@ fun HomeScreen(
                     else -> Unit
                 }
             },
-            onItemClick = { item ->
-                handleItemClick(
-                    item,
-                    onNavigateToAlbum,
-                    onNavigateToArtist,
-                    onNavigateToPlaylist,
-                    onNavigateToPodcast,
-                    playerConnection,
-                    scope,
-                    onNavigateToBrowse,
-                    startVideo = false,
-                )
+            onItemClick = onHomeItemClick,
+            onSpeedDialItemClick = { item ->
+                if (item is SongItem) {
+                    playerConnection?.startRadio(item)
+                } else {
+                    onHomeItemClick(item)
+                }
             },
             onItemLongClick = { selectedMenuItem = it },
             onShuffleSongs = { songs -> playerConnection?.shuffleQueue(songs, queueTitle = sharedText.shuffle) },
@@ -337,6 +347,12 @@ fun HomeScreen(
                                 onSelectionChange = viewModel.shared::toggleChip,
                                 label = { it.title },
                                 modifier = Modifier.padding(top = 1.dp),
+                            )
+                        }
+                        item(key = "wrapped_card") {
+                            WrappedHomeCard(
+                                onClick = onNavigateToWrapped,
+                                onDismissed = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
                             )
                         }
                     }

@@ -617,6 +617,24 @@ Graph refreshed with graphify (AST only, offline): 43,585 nodes. Found and fixed
 - **Known, upstream:** normal playback still has a brief hiccup at about 1:00 on the first song that uses the web client;
   the player recovers by itself. Revisit after the Metrolist sync.
 
+## 2026-11-23 · Synced with upstream 14.0.1 → abcd 2.0.0-alpha1 (owner request)
+
+- Merged `upstream/main` (855 commits, Metrolist 14.0.1, InnerTubeX v0.13.0) into `sync/metrolist`, on top of the
+  1.0.0-alpha2 hotfix. 41 conflicts: 18 `.github` files (kept deleted, plus upstream's new `pr-ai-disclosure.yml`;
+  our PR template restored); 10 string catalogs (upstream text + our `dj_*` strings, then the rebrand re-applied to
+  all 58 locales, keeping only the credit/licence/migration/Discord lines); `MusicService` (DJ field kept next to
+  upstream's new `playbackCommandEvents`; sleep timer pauses the DJ mix with upstream's new remote-route check;
+  `onTaskRemoved` keeps the DJ exit; upstream split `onDestroy`, so the DJ now exits at its top, before the media
+  session is released in the `finally`); `AppUpdateManager` (abcd's off switch kept; upstream's new nightly lookup
+  is only reached through the switched-off `check()`); build files (`appVersion` 14.0.1 because Listen Together sends
+  it upstream, versionCode 155, `abcdVersion` 2.0.0-alpha1); `PlaybackEventLog` title; upstream deleted three tests,
+  we keep our crash-reporting test.
+- Verified: builds; DJ unit tests and on-device DJ tests pass; 37 of 38 app unit tests pass (the failing upstream
+  `LegacyDownloadImportTest.clearingCacheKeepsUnplayedSpansReadableUntilThePlayerCloses` deletes a file that is still
+  open, which Windows refuses; Android allows it); emulator: onboarding 5 steps, branded abcd; normal playback recovers
+  at about 0:58 as before; owner tested the build on the phone.
+- Version named 2.0.0-alpha1 by the owner: the v2 line starts from this synced base.
+
 ## 2026-11-16 · DI is Koin
 
 - **Decision:** DJ modules register Koin modules. The brief's "check whether it uses Hilt": it does not.

@@ -30,7 +30,7 @@ which of these go into v2; anything not picked stays for later.
 | C11 | **Database export/import (JSON)**, tag-correction UI beyond the Lab, scoring weights tunable in the Lab | Brief §6.3 | `ScoringConfig` (one object), Lab song details (stage 12) |
 | C12 | **Single-stream engine** (C++/Oboe) if two ExoPlayers drift on some phones | Brief §9.1 | `DjMixEngine` interface |
 | C13 | **Charts as a song source** (Hindi/Punjabi/Any mixes) | Claude's suggestion, owner undecided | `CandidateSource` |
-| C14 | **Merge upstream** (Metrolist) changes in batches for YouTube playback fixes | Owner discussion 2026-11-22 | `docs/UPSTREAM_CHANGES.md` lists every changed upstream file |
+| C14 | ✅ **Merge upstream** (Metrolist): synced with 14.0.1 on 2026-11-23 → abcd 2.0.0-alpha1. Repeat before each v2 release | Owner discussion 2026-11-22 | `docs/UPSTREAM_CHANGES.md` lists every changed upstream file |
 | C15 | **v1.0 final checks** carried over: 1-2 hour party test on a phone, update checker for abcd releases (new endpoint: ask), About/Discord links, Room migration policy, ktlint | `docs/STAGES.md` stage 12 "still open" | — |
 
 v3 (not for v2): shared server database, on-device LLM for vibes, autonomous effects (brief §6.4, §8, §9.4).

@@ -5,12 +5,14 @@ import com.metrolist.shared.api.YouTubeRepository
 import com.metrolist.shared.auth.YouTubeSyncState
 import com.metrolist.shared.db.entities.PlaylistEntity
 import com.metrolist.shared.db.entities.PlaylistSongMap
+import com.metrolist.shared.db.entities.toPlaylistItem
 import com.metrolist.shared.db.entities.toSongItem
 import com.metrolist.shared.model.PlaylistItem
 import com.metrolist.shared.model.SongItem
 import com.metrolist.shared.model.YTItem
 import com.metrolist.shared.model.canEdit
 import com.metrolist.shared.model.isEditablePlaylistId
+import com.metrolist.shared.model.isSyncablePlaylistId
 import com.metrolist.shared.model.parseDisplayCount
 import com.metrolist.shared.playlist.LibraryDeletionTracker
 import com.metrolist.shared.playlist.PlaylistChanges
@@ -105,14 +107,52 @@ suspend fun MusicDatabase.cacheRemotePlaylist(
             isEditable = playlist.canEdit,
             remoteSongCount = songs.size,
             description = playlist.description,
+            playEndpointParams = playlist.playEndpointParams,
+            radioEndpointParams = playlist.radioEndpointParams,
+            remoteHeader = playlist,
             lastUpdateTime = Clock.System.now().toLocalDateTime(TimeZone.UTC),
             isAutoSync = true,
         )
     dao.upsert(entity)
+    val existingMappings =
+        dao
+            .playlistSongs(entity.id)
+            .first()
+            .map { it.map }
+            .toMutableList()
     dao.clearPlaylist(entity.id)
+    val existingById = existingMappings.associateBy { it.id }
+    val existingBySetVideoId = existingMappings.mapNotNull { m -> m.setVideoId?.let { it to m } }.toMap()
+    val matches = mutableMapOf<Int, PlaylistSongMap>()
+    val claimed = mutableSetOf<Int>()
+    songs.forEachIndexed { index, song ->
+        val mapping =
+            song.playlistLocalMappingId?.let { id -> existingById[id] }
+                ?: song.playlistSetVideoId?.let { token -> existingBySetVideoId[token] }
+        if (mapping != null && claimed.add(mapping.id)) matches[index] = mapping
+    }
+    val unmatchedBySongId = existingMappings.filterNot { it.id in claimed }.groupBy { it.songId }
+    songs.indices.filterNot(matches::containsKey).groupBy { songs[it].id }.forEach { (songId, indices) ->
+        val old = unmatchedBySongId[songId].orEmpty()
+        if (indices.size == old.size) {
+            indices.zip(old).forEach { (index, mapping) ->
+                val token = songs[index].playlistSetVideoId
+                if (token == null || mapping.setVideoId == null || token == mapping.setVideoId) matches[index] = mapping
+            }
+        }
+    }
     songs.forEachIndexed { index, song ->
         dao.upsertHistorySong(song)
-        dao.insert(PlaylistSongMap(playlistId = entity.id, songId = song.id, position = index, setVideoId = song.playlistSetVideoId))
+        val existingMapping = matches[index]
+        dao.insert(
+            PlaylistSongMap(
+                id = existingMapping?.id ?: 0,
+                playlistId = entity.id,
+                songId = song.id,
+                position = index,
+                setVideoId = song.playlistSetVideoId,
+            ),
+        )
     }
 }
 
@@ -158,22 +198,32 @@ internal suspend fun MusicDatabase.repairRemotePlaylistMembership(
     if (complete && isCurrent()) YouTubeSyncState.succeeded("playlist-membership")
 }
 
+fun PlaylistEntity.hasCompleteStoredSongs(songs: List<SongItem>): Boolean =
+    isLocal || browseId == null ||
+        (
+            remoteHeader != null && browseId.isSyncablePlaylistId() &&
+                remoteSongCount?.let { songs.size >= it && (it > 0 || isAutoSync) } == true &&
+                (!isEditable || songs.all { !it.playlistSetVideoId.isNullOrBlank() })
+        )
+
 suspend fun MusicDatabase.cachedRemotePlaylistSections(id: String): Map<String, List<YTItem>>? {
     val entity = dao().findPlaylistEntity(id) ?: return null
-    val browseId = entity.browseId ?: return null
+    if (entity.browseId == null) return null
     val rows = dao().playlistSongs(entity.id).first()
-    if (rows.isEmpty()) return null
     val songs = rows.map { it.song.toSongItem().copy(playlistSetVideoId = it.map.setVideoId) }
-    val header =
-        PlaylistItem(
-            id = browseId,
-            title = entity.name,
-            thumbnail = entity.thumbnailUrl,
-            songCount = (entity.remoteSongCount ?: songs.size).toString(),
-            isEditable = entity.isEditable,
-            description = entity.description,
-        )
+    if (!entity.hasCompleteStoredSongs(songs)) return null
+    val header = entity.toPlaylistItem(entity.remoteSongCount ?: songs.size)
     return mapOf("header" to listOf(header), "Tracks" to songs)
+}
+
+suspend fun MusicDatabase.refreshStoredPlaylist(
+    repository: YouTubeRepository,
+    id: String,
+) {
+    val remoteId = dao().findPlaylistEntity(id)?.browseId ?: id
+    val page = loadAndCachePlaylistPage(repository, id)
+    check(!page.isOffline) { "Playlist sync requires a connection" }
+    PlaylistChanges.notifyChanged(remoteId)
 }
 
 suspend fun MusicDatabase.loadAndCachePlaylist(
